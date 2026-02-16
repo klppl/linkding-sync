@@ -297,6 +297,110 @@
       border-color: #4f46e5;
     }
 
+    /* Two-way sync specifics */
+    .twoway-settings {
+      display: none;
+    }
+    .twoway-settings.visible { display: block; }
+    .initial-sync-section {
+      display: none;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .initial-sync-section.visible { display: block; }
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .radio-option:hover {
+      border-color: #4f46e5;
+      background: #f5f3ff;
+    }
+    .radio-option.selected {
+      border-color: #4f46e5;
+      background: #eef2ff;
+    }
+    .radio-option input[type="radio"] {
+      margin-top: 2px;
+      accent-color: #4f46e5;
+    }
+    .radio-option-text {
+      flex: 1;
+    }
+    .radio-option-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+    }
+    .radio-option-desc {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+    .initial-progress {
+      margin-top: 12px;
+      display: none;
+    }
+    .initial-progress.visible { display: block; }
+    .initial-progress-text {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+    .initial-progress-bar {
+      height: 4px;
+      background: #e5e7eb;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .initial-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4f46e5, #7c3aed);
+      border-radius: 2px;
+      width: 40%;
+      animation: indeterminate 1.2s ease-in-out infinite;
+    }
+    @keyframes indeterminate {
+      0% { margin-left: 0; }
+      50% { margin-left: 60%; }
+      100% { margin-left: 0; }
+    }
+    .folder-conflict-warning {
+      display: none;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #991b1b;
+    }
+    .folder-conflict-warning.visible { display: block; }
+    .initial-done-badge {
+      display: none;
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #065f46;
+    }
+    .initial-done-badge.visible { display: block; }
+
     /* Buttons */
     .btn-row {
       display: flex;
@@ -429,6 +533,80 @@
           <div class="interval-opt" data-val="360">6 hours</div>
           <div class="interval-opt" data-val="720">12 hours</div>
           <div class="interval-opt" data-val="1440">24 hours</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-Way Sync card -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Two-Way Sync
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Enable two-way sync</div>
+          <div class="toggle-desc">Keep a browser folder in sync with tagged Linkding bookmarks.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="twoway-enabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="twoway-settings" id="twoway-settings">
+        <div class="field" style="margin-top:16px;">
+          <label for="twoway-tag">Sync Tag</label>
+          <input type="text" id="twoway-tag" value="bookmark-sync" placeholder="bookmark-sync">
+          <div class="hint">Only bookmarks with this tag in Linkding will be synced.</div>
+        </div>
+
+        <div class="field">
+          <label>Sync Folder</label>
+          <div class="tree-container" id="twoway-folder-tree"></div>
+        </div>
+        <div class="folder-path" id="twoway-selected-path"></div>
+        <div class="folder-conflict-warning" id="folder-conflict-warning">
+          The two-way sync folder cannot be the same as (or inside) the one-way download folder. Choose a different folder.
+        </div>
+
+        <div class="initial-done-badge" id="initial-done-badge">
+          Initial sync completed. Two-way sync is active.
+        </div>
+
+        <div class="initial-sync-section" id="initial-sync-section">
+          <label style="font-size:13px;font-weight:600;color:#374151;">Initial Sync Mode</label>
+          <div class="hint" style="margin-bottom:8px;">Choose how to handle existing bookmarks on the first sync.</div>
+          <div class="radio-group" id="initial-mode-group">
+            <label class="radio-option selected" data-mode="merge">
+              <input type="radio" name="initial-mode" value="merge" checked>
+              <div class="radio-option-text">
+                <div class="radio-option-label">Merge</div>
+                <div class="radio-option-desc">Match by URL. Upload Chrome-only bookmarks, download Linkding-only bookmarks. No duplicates.</div>
+              </div>
+            </label>
+            <label class="radio-option" data-mode="push">
+              <input type="radio" name="initial-mode" value="push">
+              <div class="radio-option-text">
+                <div class="radio-option-label">Push to Linkding</div>
+                <div class="radio-option-desc">Upload all Chrome folder bookmarks to Linkding with the sync tag. Existing URL matches are linked.</div>
+              </div>
+            </label>
+            <label class="radio-option" data-mode="pull">
+              <input type="radio" name="initial-mode" value="pull">
+              <div class="radio-option-text">
+                <div class="radio-option-label">Pull from Linkding</div>
+                <div class="radio-option-desc">Clear Chrome folder and download all tagged Linkding bookmarks.</div>
+              </div>
+            </label>
+          </div>
+          <button class="btn btn-primary" id="start-initial-sync" style="width:100%;">Start Initial Sync</button>
+          <div class="initial-progress" id="initial-progress">
+            <div class="initial-progress-bar">
+              <div class="initial-progress-fill"></div>
+            </div>
+            <div class="initial-progress-text" id="initial-progress-text">Starting...</div>
+          </div>
         </div>
       </div>
     </div>

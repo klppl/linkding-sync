@@ -243,6 +243,20 @@
     </div>
 
     <div class="result" id="result"></div>
+
+    <!-- Two-Way Sync Section -->
+    <div class="twoway-section" id="twoway-section" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid #e5e7eb;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-size:12px; font-weight:600; color:#374151;">Two-Way Sync</span>
+        <span class="twoway-badge" id="twoway-badge" style="font-size:10px; padding:2px 8px; border-radius:10px; background:#ecfdf5; color:#065f46;">Active</span>
+      </div>
+      <button class="sync-btn" id="twoway-sync" style="background:linear-gradient(135deg, #059669, #10b981); padding:10px; font-size:13px;">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        <span id="twoway-sync-label">Two-Way Sync</span>
+      </button>
+      <div class="result" id="twoway-result" style="display:none; margin-top:8px;"></div>
+      <div style="font-size:10px; color:#9ca3af; margin-top:6px;" id="twoway-last-sync"></div>
+    </div>
   </div>
 
   <div class="footer">

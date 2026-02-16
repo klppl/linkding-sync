@@ -8,6 +8,8 @@ Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
 
 ## Features
 
+### One-Way Sync (Linkding to Browser)
+
 - Syncs all bookmarks from Linkding into a dedicated browser bookmark folder
 - Organizes bookmarks into subfolders by tag
 - Bookmarks with multiple tags appear in each tag's folder
@@ -15,6 +17,17 @@ Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
 - Optional automatic background sync on a configurable interval
 - Choose any bookmark folder as the sync destination
 - Settings sync across devices via `chrome.storage.sync`
+
+### Two-Way Sync
+
+- Keep a browser folder (e.g. Bookmark Bar) in sync with Linkding bookmarks that share a specific tag
+- Bidirectional: add a bookmark in Chrome and it appears in Linkding, or add one in Linkding and it appears in Chrome
+- Full subfolder support — folder structure is preserved using path-based tags (e.g. `bookmark-sync/Work/Projects`)
+- Deleting a bookmark on either side removes it from the other on the next sync
+- Title and folder changes are detected and synced in both directions
+- Real-time sync: bookmark changes in Chrome trigger a sync automatically (2-second debounce)
+- Three initial sync modes: **Push** (Chrome to Linkding), **Pull** (Linkding to Chrome), or **Merge** (combine both, no duplicates)
+- Runs alongside the one-way sync without interference
 
 ## Installation
 
@@ -53,9 +66,37 @@ There is no build step required — the extension is plain JS/HTML/CSS.
 
 ## Usage
 
+### One-Way Sync
+
 Click the extension icon and press **Sync Now** to sync your bookmarks. The popup displays the number of bookmarks and tags synced, along with the time of the last sync.
 
 If auto-sync is enabled, the extension will sync in the background at your chosen interval.
+
+### Two-Way Sync
+
+1. Open **Settings** and scroll to the **Two-Way Sync** card
+2. Enable the toggle
+3. Set a **Sync Tag** (default: `bookmark-sync`) — only Linkding bookmarks with this tag will be synced
+4. Pick a **Sync Folder** in the browser (e.g. Bookmark Bar) — this folder and all its subfolders will be kept in sync
+5. Save settings, then choose an **Initial Sync Mode**:
+   - **Merge** — matches bookmarks by URL across both sides, uploads Chrome-only bookmarks, downloads Linkding-only bookmarks
+   - **Push** — uploads everything from the Chrome folder to Linkding
+   - **Pull** — clears the Chrome folder and downloads all tagged Linkding bookmarks
+6. Click **Start Initial Sync**
+
+After the initial sync, two-way sync runs automatically whenever you add, remove, or move bookmarks in the synced folder. You can also trigger it manually from the popup.
+
+#### How folder structure works
+
+Browser subfolder paths are encoded as Linkding tags:
+
+| Browser location | Linkding tags |
+|---|---|
+| `Bookmark Bar/example.com` | `bookmark-sync` |
+| `Bookmark Bar/Work/example.com` | `bookmark-sync`, `bookmark-sync/Work` |
+| `Bookmark Bar/Work/Projects/example.com` | `bookmark-sync`, `bookmark-sync/Work/Projects` |
+
+This means you can control where a bookmark lands in Chrome by adding the right path tag in Linkding. For example, adding tag `bookmark-sync/Recipes` to a Linkding bookmark will place it in a `Recipes` subfolder on the next sync.
 
 ## Linkding API Token
 

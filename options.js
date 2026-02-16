@@ -1,5 +1,6 @@
 let selectedParentId = null;
 let selectedInterval = 60;
+let selectedTwoWayFolderId = null;
 
 // ===================== Bookmark tree =====================
 
@@ -9,22 +10,38 @@ async function loadTree() {
   container.innerHTML = "";
   const ul = document.createElement("ul");
   for (const child of tree[0].children || []) {
-    renderNode(child, ul);
+    renderNode(child, ul, "oneway");
   }
   container.appendChild(ul);
 
   // Restore saved selection
   const { parentFolderId } = await chrome.storage.sync.get({ parentFolderId: null });
-  if (parentFolderId) selectFolder(parentFolderId);
+  if (parentFolderId) selectFolder(parentFolderId, "oneway");
 }
 
-function renderNode(node, parentUl) {
+async function loadTwoWayTree() {
+  const tree = await chrome.bookmarks.getTree();
+  const container = document.getElementById("twoway-folder-tree");
+  container.innerHTML = "";
+  const ul = document.createElement("ul");
+  for (const child of tree[0].children || []) {
+    renderNode(child, ul, "twoway");
+  }
+  container.appendChild(ul);
+
+  // Restore saved selection
+  const { twoWaySyncFolderId } = await chrome.storage.sync.get({ twoWaySyncFolderId: null });
+  if (twoWaySyncFolderId) selectFolder(twoWaySyncFolderId, "twoway");
+}
+
+function renderNode(node, parentUl, treeType) {
   if (node.url) return;
 
   const li = document.createElement("li");
   const row = document.createElement("div");
   row.className = "tree-row";
   row.dataset.id = node.id;
+  row.dataset.treeType = treeType;
 
   const toggle = document.createElement("span");
   toggle.className = "tree-toggle";
@@ -44,7 +61,7 @@ function renderNode(node, parentUl) {
     childUl = document.createElement("ul");
     childUl.style.display = "none";
     for (const child of childFolders) {
-      renderNode(child, childUl);
+      renderNode(child, childUl, treeType);
     }
     li.appendChild(childUl);
   }
@@ -57,19 +74,22 @@ function renderNode(node, parentUl) {
     toggle.textContent = open ? "\u25B6" : "\u25BC";
   });
 
-  row.addEventListener("click", () => selectFolder(node.id));
+  row.addEventListener("click", () => selectFolder(node.id, treeType));
   parentUl.appendChild(li);
 }
 
-function selectFolder(id) {
-  const prev = document.querySelector(".tree-row.selected");
+function selectFolder(id, treeType) {
+  const containerId = treeType === "twoway" ? "twoway-folder-tree" : "folder-tree";
+  const container = document.getElementById(containerId);
+
+  const prev = container.querySelector(".tree-row.selected");
   if (prev) prev.classList.remove("selected");
 
-  const row = document.querySelector(`.tree-row[data-id="${id}"]`);
+  const row = container.querySelector(`.tree-row[data-id="${id}"]`);
   if (row) {
     row.classList.add("selected");
     let parent = row.closest("ul");
-    while (parent && parent.closest(".tree-container") && parent !== document.getElementById("folder-tree")) {
+    while (parent && parent.closest(".tree-container") && parent !== container) {
       parent.style.display = "block";
       const prevSib = parent.previousElementSibling;
       if (prevSib) {
@@ -80,8 +100,14 @@ function selectFolder(id) {
     }
   }
 
-  selectedParentId = id;
-  updatePathDisplay(id);
+  if (treeType === "twoway") {
+    selectedTwoWayFolderId = id;
+    updateTwoWayPathDisplay(id);
+    checkFolderConflict();
+  } else {
+    selectedParentId = id;
+    updatePathDisplay(id);
+  }
 }
 
 async function updatePathDisplay(id) {
@@ -96,6 +122,72 @@ async function updatePathDisplay(id) {
   const pathEl = document.getElementById("selected-path");
   pathEl.textContent = parts.join(" / ") + " / " + folderName;
   pathEl.classList.add("visible");
+}
+
+async function updateTwoWayPathDisplay(id) {
+  const parts = [];
+  let currentId = id;
+  while (currentId) {
+    const [node] = await chrome.bookmarks.get(currentId);
+    parts.unshift(node.title || "(root)");
+    currentId = node.parentId;
+  }
+  const pathEl = document.getElementById("twoway-selected-path");
+  pathEl.textContent = parts.join(" / ");
+  pathEl.classList.add("visible");
+}
+
+// ===================== Folder conflict validation =====================
+
+async function getOneWayFolderId() {
+  if (!selectedParentId) return null;
+  const folderName = document.getElementById("folder-name").value.trim() || "Linkding";
+  try {
+    const children = await chrome.bookmarks.getChildren(selectedParentId);
+    const existing = children.find((n) => !n.url && n.title === folderName);
+    return existing ? existing.id : null;
+  } catch {
+    return null;
+  }
+}
+
+async function isDescendantOf(childId, ancestorId) {
+  let currentId = childId;
+  while (currentId) {
+    if (currentId === ancestorId) return true;
+    try {
+      const [node] = await chrome.bookmarks.get(currentId);
+      currentId = node.parentId;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+async function checkFolderConflict() {
+  const warning = document.getElementById("folder-conflict-warning");
+  if (!selectedTwoWayFolderId || !selectedParentId) {
+    warning.classList.remove("visible");
+    return false;
+  }
+
+  const oneWayFolderId = await getOneWayFolderId();
+
+  // Check if two-way folder is the same as the one-way target folder
+  if (oneWayFolderId && selectedTwoWayFolderId === oneWayFolderId) {
+    warning.classList.add("visible");
+    return true;
+  }
+
+  // Check if two-way folder is a descendant of the one-way folder
+  if (oneWayFolderId && await isDescendantOf(selectedTwoWayFolderId, oneWayFolderId)) {
+    warning.classList.add("visible");
+    return true;
+  }
+
+  warning.classList.remove("visible");
+  return false;
 }
 
 // ===================== Auto-sync UI =====================
@@ -116,6 +208,69 @@ intervalOptions.forEach((opt) => {
   });
 });
 
+// ===================== Two-Way Sync UI =====================
+
+const twoWayToggle = document.getElementById("twoway-enabled");
+const twoWaySettings = document.getElementById("twoway-settings");
+
+twoWayToggle.addEventListener("change", () => {
+  twoWaySettings.classList.toggle("visible", twoWayToggle.checked);
+  if (twoWayToggle.checked) {
+    loadTwoWayTree();
+  }
+});
+
+// Radio option selection
+document.querySelectorAll("#initial-mode-group .radio-option").forEach((opt) => {
+  opt.addEventListener("click", () => {
+    document.querySelectorAll("#initial-mode-group .radio-option").forEach((o) => o.classList.remove("selected"));
+    opt.classList.add("selected");
+    opt.querySelector("input[type=radio]").checked = true;
+  });
+});
+
+// Initial sync button
+document.getElementById("start-initial-sync").addEventListener("click", async () => {
+  const mode = document.querySelector('input[name="initial-mode"]:checked').value;
+  const btn = document.getElementById("start-initial-sync");
+  const progress = document.getElementById("initial-progress");
+  const progressText = document.getElementById("initial-progress-text");
+
+  btn.disabled = true;
+  btn.textContent = "Syncing...";
+  progress.classList.add("visible");
+  progressText.textContent = "Starting initial sync...";
+
+  chrome.runtime.sendMessage({ action: "twoWayInitialSync", mode }, (response) => {
+    btn.disabled = false;
+    btn.textContent = "Start Initial Sync";
+    progress.classList.remove("visible");
+
+    if (chrome.runtime.lastError) {
+      showToast("error", "Could not reach background worker. Try reloading the extension.");
+      return;
+    }
+
+    if (response && response.ok) {
+      const r = response.result;
+      showToast("success", `Initial sync complete!\nAdded: ${r.added}, Updated: ${r.updated}, Downloaded: ${r.downloaded}, Total: ${r.total}`);
+      // Update UI to show sync is done
+      document.getElementById("initial-sync-section").classList.remove("visible");
+      document.getElementById("initial-done-badge").classList.add("visible");
+    } else {
+      showToast("error", response ? response.error : "Unknown error");
+    }
+  });
+});
+
+// Listen for two-way progress
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === "twoWayProgress") {
+    const progressText = document.getElementById("initial-progress-text");
+    if (progressText) progressText.textContent = msg.text;
+  }
+});
+
 // ===================== Load settings =====================
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -126,6 +281,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     parentFolderId: null,
     autoSync: false,
     autoSyncInterval: 60,
+    twoWayEnabled: false,
+    twoWaySyncTag: "bookmark-sync",
+    twoWaySyncFolderId: null,
+    twoWayInitialSyncDone: false,
   });
 
   document.getElementById("url").value = s.url;
@@ -140,11 +299,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (parseInt(opt.dataset.val) === s.autoSyncInterval) opt.classList.add("active");
   });
 
+  // Two-way sync
+  twoWayToggle.checked = s.twoWayEnabled;
+  if (s.twoWayEnabled) {
+    twoWaySettings.classList.add("visible");
+    await loadTwoWayTree();
+  }
+  document.getElementById("twoway-tag").value = s.twoWaySyncTag;
+  selectedTwoWayFolderId = s.twoWaySyncFolderId;
+
+  if (s.twoWayEnabled && s.twoWayInitialSyncDone) {
+    document.getElementById("initial-done-badge").classList.add("visible");
+  } else if (s.twoWayEnabled) {
+    document.getElementById("initial-sync-section").classList.add("visible");
+  }
+
   await loadTree();
 });
 
 document.getElementById("folder-name").addEventListener("input", () => {
   if (selectedParentId) updatePathDisplay(selectedParentId);
+  checkFolderConflict();
 });
 
 // ===================== Test connection =====================
@@ -183,11 +358,13 @@ function setConnectionStatus(state, text) {
 
 // ===================== Save =====================
 
-document.getElementById("save").addEventListener("click", () => {
+document.getElementById("save").addEventListener("click", async () => {
   const url = document.getElementById("url").value.trim().replace(/\/+$/, "");
   const token = document.getElementById("token").value.trim();
   const folderName = document.getElementById("folder-name").value.trim() || "Linkding";
   const autoSync = autoSyncToggle.checked;
+  const twoWayEnabled = twoWayToggle.checked;
+  const twoWaySyncTag = document.getElementById("twoway-tag").value.trim() || "bookmark-sync";
 
   if (!url || !token) {
     showToast("error", "URL and API token are required.");
@@ -198,6 +375,28 @@ document.getElementById("save").addEventListener("click", () => {
     return;
   }
 
+  if (twoWayEnabled) {
+    if (!selectedTwoWayFolderId) {
+      showToast("error", "Select a folder for two-way sync.");
+      return;
+    }
+    if (!twoWaySyncTag) {
+      showToast("error", "Enter a sync tag for two-way sync.");
+      return;
+    }
+    const hasConflict = await checkFolderConflict();
+    if (hasConflict) {
+      showToast("error", "Two-way sync folder conflicts with one-way download folder. Choose a different folder.");
+      return;
+    }
+
+    // Show initial sync section if not done yet
+    const { twoWayInitialSyncDone } = await chrome.storage.sync.get({ twoWayInitialSyncDone: false });
+    if (!twoWayInitialSyncDone) {
+      document.getElementById("initial-sync-section").classList.add("visible");
+    }
+  }
+
   chrome.storage.sync.set(
     {
       url,
@@ -206,6 +405,9 @@ document.getElementById("save").addEventListener("click", () => {
       parentFolderId: selectedParentId,
       autoSync,
       autoSyncInterval: selectedInterval,
+      twoWayEnabled,
+      twoWaySyncTag,
+      twoWaySyncFolderId: twoWayEnabled ? selectedTwoWayFolderId : null,
     },
     () => showToast("success", "Settings saved!")
   );

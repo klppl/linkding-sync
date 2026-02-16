@@ -24,6 +24,18 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } catch (err) {
     console.error("[Linkding] Auto-sync error:", err);
   }
+
+  // Also run two-way sync if enabled
+  try {
+    const settings = await getSettings();
+    if (settings.twoWayEnabled && settings.twoWayInitialSyncDone) {
+      console.log("[Linkding] Auto two-way sync triggered");
+      const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
+      console.log(`[Linkding] Auto two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+    }
+  } catch (err) {
+    console.error("[Linkding] Auto two-way sync error:", err);
+  }
 });
 
 // Listen for settings changes to update alarm
@@ -36,15 +48,98 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // Listen for manual sync requests from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action !== "sync") return;
-  // Return true to keep sendResponse channel open for async
-  runSync((phase, text) => {
-    // Send progress back to popup
-    chrome.runtime.sendMessage({ action: "syncProgress", phase, text }).catch(() => {});
-  })
-    .then((result) => sendResponse({ ok: true, result }))
-    .catch((err) => sendResponse({ ok: false, error: err.message }));
-  return true;
+  if (msg.action === "sync") {
+    runSync((phase, text) => {
+      chrome.runtime.sendMessage({ action: "syncProgress", phase, text }).catch(() => {});
+    })
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.action === "twoWayInitialSync") {
+    runInitialTwoWaySync(msg.mode, (phase, text) => {
+      chrome.runtime.sendMessage({ action: "twoWayProgress", phase, text }).catch(() => {});
+    })
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.action === "twoWaySync") {
+    runTwoWaySync((phase, text) => {
+      chrome.runtime.sendMessage({ action: "twoWayProgress", phase, text }).catch(() => {});
+    })
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+});
+
+// ===================== Two-Way Bookmark Listeners =====================
+
+let twoWaySyncDebounceTimer = null;
+let twoWaySyncRunning = false;
+
+function debounceTwoWaySync() {
+  if (twoWaySyncRunning) return;
+  clearTimeout(twoWaySyncDebounceTimer);
+  twoWaySyncDebounceTimer = setTimeout(async () => {
+    twoWaySyncRunning = true;
+    try {
+      const settings = await getSettings();
+      if (!settings.twoWayEnabled || !settings.twoWayInitialSyncDone) return;
+      console.log("[Linkding] Bookmark change detected, running two-way sync...");
+      const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
+      console.log(`[Linkding] Two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+    } catch (err) {
+      console.error("[Linkding] Two-way sync error:", err);
+    } finally {
+      twoWaySyncRunning = false;
+    }
+  }, 2000);
+}
+
+// Check if a folder ID is inside the two-way sync folder tree (walks up parents)
+async function isInsideTwoWaySyncFolder(folderId) {
+  try {
+    const settings = await getSettings();
+    if (!settings.twoWayEnabled || !settings.twoWaySyncFolderId) return false;
+    return await isInsideTwoWayFolder(folderId, settings.twoWaySyncFolderId);
+  } catch {
+    return false;
+  }
+}
+
+chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
+  if (bookmark.url && await isInsideTwoWaySyncFolder(bookmark.parentId)) {
+    debounceTwoWaySync();
+  }
+});
+
+chrome.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
+  if (await isInsideTwoWaySyncFolder(removeInfo.parentId)) {
+    debounceTwoWaySync();
+  }
+});
+
+chrome.bookmarks.onChanged.addListener(async (id) => {
+  try {
+    const [node] = await chrome.bookmarks.get(id);
+    if (await isInsideTwoWaySyncFolder(node.parentId)) {
+      debounceTwoWaySync();
+    }
+  } catch {
+    // bookmark gone
+  }
+});
+
+chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
+  const oldInside = await isInsideTwoWaySyncFolder(moveInfo.oldParentId);
+  const newInside = await isInsideTwoWaySyncFolder(moveInfo.parentId);
+  if (oldInside || newInside) {
+    debounceTwoWaySync();
+  }
 });
 
 // Initialize alarm on install/startup

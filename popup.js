@@ -15,6 +15,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     lastSyncTime: null,
     lastSyncCount: null,
     lastSyncTags: null,
+    twoWayEnabled: false,
+    twoWayInitialSyncDone: false,
+    twoWayLastSyncTime: null,
+    twoWaySyncTag: "bookmark-sync",
   });
 
   // Instance URL
@@ -49,6 +53,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     s.lastSyncTime ? timeAgo(s.lastSyncTime) : "--";
   document.getElementById("last-sync-time").textContent =
     s.lastSyncTime ? `Last: ${new Date(s.lastSyncTime).toLocaleString()}` : "";
+
+  // Two-way sync section
+  if (s.twoWayEnabled && s.twoWayInitialSyncDone) {
+    document.getElementById("twoway-section").style.display = "block";
+    document.getElementById("twoway-last-sync").textContent =
+      s.twoWayLastSyncTime
+        ? `Tag: ${s.twoWaySyncTag} \u2022 Last: ${timeAgo(s.twoWayLastSyncTime)}`
+        : `Tag: ${s.twoWaySyncTag}`;
+  }
 });
 
 // --------------- Settings link ---------------
@@ -94,6 +107,50 @@ syncBtn.addEventListener("click", () => {
     }
   });
 });
+
+// --------------- Two-Way Sync ---------------
+
+const twoWaySyncBtn = document.getElementById("twoway-sync");
+const twoWaySyncLabel = document.getElementById("twoway-sync-label");
+const twoWayResult = document.getElementById("twoway-result");
+
+twoWaySyncBtn.addEventListener("click", () => {
+  twoWaySyncBtn.disabled = true;
+  twoWaySyncBtn.classList.add("syncing");
+  twoWaySyncLabel.textContent = "Syncing...";
+  twoWayResult.style.display = "none";
+
+  chrome.runtime.sendMessage({ action: "twoWaySync" }, (response) => {
+    twoWaySyncBtn.disabled = false;
+    twoWaySyncBtn.classList.remove("syncing");
+    twoWaySyncLabel.textContent = "Two-Way Sync";
+
+    if (chrome.runtime.lastError) {
+      showTwoWayResult("error", "Could not reach background worker.");
+      return;
+    }
+
+    if (response && response.ok) {
+      const r = response.result;
+      const parts = [];
+      if (r.added > 0) parts.push(`+${r.added} added`);
+      if (r.removed > 0) parts.push(`-${r.removed} removed`);
+      if (r.updated > 0) parts.push(`~${r.updated} updated`);
+      const summary = parts.length > 0 ? parts.join(", ") : "Everything in sync";
+      showTwoWayResult("success", `${summary} (${r.total} total)`);
+      document.getElementById("twoway-last-sync").textContent =
+        `Last: just now`;
+    } else {
+      showTwoWayResult("error", response ? response.error : "Unknown error");
+    }
+  });
+});
+
+function showTwoWayResult(type, text) {
+  twoWayResult.style.display = "block";
+  twoWayResult.className = `result visible ${type}`;
+  twoWayResult.textContent = text;
+}
 
 // Listen for progress from background
 chrome.runtime.onMessage.addListener((msg) => {
