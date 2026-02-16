@@ -455,3 +455,98 @@ function showToast(type, msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("visible"), 3000);
 }
+// ===================== Manual Sync =====================
+
+function runManualSync(mode) {
+  const btnId = `force-${mode}-btn`;
+  const btn = document.getElementById(btnId);
+  const progress = document.getElementById("manual-progress");
+  const progressText = document.getElementById("manual-progress-text");
+
+  // Confirm destructive actions
+  if (mode === "push") {
+    if (!confirm("FORCE PUSH: This will OVERWRITE Linkding bookmarks with your Chrome bookmarks for the synced tag. Linkding tags on these bookmarks might be reset to just the sync tags. Continue?")) return;
+  }
+  if (mode === "pull") {
+    if (!confirm("FORCE PULL: This will REPLACE your Chrome bookmarks in the sync folder with data from Linkding. Any Chrome-only bookmarks in this folder will be lost. Continue?")) return;
+  }
+
+  // Disable all buttons
+  ["push", "pull", "merge"].forEach(m => {
+    document.getElementById(`force-${m}-btn`).disabled = true;
+  });
+
+  btn.textContent = "Syncing...";
+  progress.classList.add("visible");
+  progressText.textContent = `Starting force ${mode}...`;
+
+  // Reset bar
+  const fill = document.getElementById("manual-progress-fill");
+  if (fill) {
+    fill.style.width = "0%";
+    fill.style.animation = "indeterminate 1.5s infinite linear"; // Start with indeterminate until numbers arrive
+  }
+
+  chrome.runtime.sendMessage({ action: "twoWayInitialSync", mode }, (response) => {
+    // Re-enable buttons
+    ["push", "pull", "merge"].forEach(m => {
+      document.getElementById(`force-${m}-btn`).disabled = false;
+    });
+    document.getElementById("force-push-btn").textContent = "Force Push";
+    document.getElementById("force-pull-btn").textContent = "Force Pull";
+    document.getElementById("force-merge-btn").textContent = "Force Merge";
+
+    progress.classList.remove("visible");
+
+    if (chrome.runtime.lastError) {
+      showToast("error", "Could not reach background worker. Try reloading.");
+      return;
+    }
+
+    if (response && response.ok) {
+      const r = response.result;
+      let msg = `${mode} complete!\nAdded: ${r.added}, Updated: ${r.updated}, Downloaded: ${r.downloaded}`;
+      if (r.configError) {
+        msg += `\n\nWARNING: Config bookmark failed: ${r.configError}`;
+        showToast("error", msg); // Show as error if config failed
+      } else {
+        showToast("success", msg);
+      }
+    } else {
+      showToast("error", response ? response.error : "Unknown error");
+    }
+  });
+}
+
+document.getElementById("force-push-btn").addEventListener("click", () => runManualSync("push"));
+document.getElementById("force-pull-btn").addEventListener("click", () => runManualSync("pull"));
+document.getElementById("force-merge-btn").addEventListener("click", () => runManualSync("merge"));
+// Listen for progress updates from background
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === "twoWayProgress") {
+    const text = msg.text || "";
+    const progressFill = document.getElementById("manual-progress-fill");
+    const progressText = document.getElementById("manual-progress-text");
+
+    if (progressFill && progressText) {
+      progressText.textContent = text;
+
+      // parsing "Pushed X of Y..."
+      const match = text.match(/(?:Pushed|Pulled|Merged)\s+(\d+)\s+of\s+(\d+)/);
+      if (match) {
+        const current = parseInt(match[1], 10);
+        const total = parseInt(match[2], 10);
+        if (total > 0) {
+          const pct = Math.round((current / total) * 100);
+          progressFill.style.width = `${pct}%`;
+        }
+      } else if (text.startsWith("Fetching") || text.startsWith("Reading")) {
+        progressFill.style.width = "5%"; // Indeterminate / starting
+        progressFill.style.animation = "indeterminate 1.5s infinite linear";
+        // Re-enable indeterminate animation if needed, or just set a small width
+      } else {
+        progressFill.style.animation = "none";
+      }
+    }
+  }
+});

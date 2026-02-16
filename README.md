@@ -99,6 +99,26 @@ Browser subfolder paths are encoded as Linkding tags:
 
 This means you can control where a bookmark lands in Chrome by adding the right path tag in Linkding. For example, adding tag `bookmark-sync/Recipes` to a Linkding bookmark will place it in a `Recipes` subfolder on the next sync.
 
+### Manual Sync Actions & Troubleshooting
+
+In the extension Options, under the **Manual Actions** section (expandable), you can force a full sync operation:
+
+-   **Force Push**: Overwrites all Linkding bookmarks with the current state of your Chrome sync folder. Useful if Linkding is out of sync or you want to reset the server state.
+-   **Force Pull**: Overwrites your Chrome sync folder with data from Linkding. Useful if your local bookmarks are messed up.
+-   **Force Merge**: Attempts to merge both sides again, downloading missing bookmarks from Linkding and uploading new ones from Chrome.
+
+**Note**: These operations are rate-limited (1 second per item) to prevent server errors, so a "Force Push" of hundreds of bookmarks might take a few minutes. A progress bar will show the status.
+
+### Bookmark Ordering
+
+The extension supports **syncing your custom bookmark order**:
+
+1.  Reorder bookmarks in your Chrome sync folder (drag and drop).
+2.  The extension detects the change and saves the new order to a special bookmark in Linkding titled `Linkding Sync Config`.
+3.  On other devices (or after a Force Pull), bookmarks will be sorted to match this order.
+
+**Note**: Do not delete the `Linkding Sync Config` bookmark in Linkding, as it stores your sort preferences.
+
 ## Linkding API Token
 
 To get your API token:

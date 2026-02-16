@@ -1,10 +1,16 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <title>Linkding Sync Settings</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #f3f4f6;
@@ -22,11 +28,13 @@
     .page-header {
       margin-bottom: 32px;
     }
+
     .page-header h1 {
       font-size: 24px;
       font-weight: 700;
       color: #111827;
     }
+
     .page-header p {
       font-size: 14px;
       color: #6b7280;
@@ -39,8 +47,9 @@
       border-radius: 12px;
       padding: 24px;
       margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
     }
+
     .card-title {
       font-size: 14px;
       font-weight: 700;
@@ -52,6 +61,7 @@
       align-items: center;
       gap: 8px;
     }
+
     .card-title svg {
       width: 18px;
       height: 18px;
@@ -66,7 +76,11 @@
     .field {
       margin-bottom: 16px;
     }
-    .field:last-child { margin-bottom: 0; }
+
+    .field:last-child {
+      margin-bottom: 0;
+    }
+
     .field label {
       display: block;
       font-size: 13px;
@@ -74,6 +88,7 @@
       color: #374151;
       margin-bottom: 4px;
     }
+
     .field input[type="text"],
     .field input[type="password"],
     .field input[type="url"] {
@@ -87,10 +102,12 @@
       outline: none;
       background: #fff;
     }
+
     .field input:focus {
       border-color: #4f46e5;
       box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     }
+
     .field .hint {
       font-size: 12px;
       color: #9ca3af;
@@ -108,34 +125,60 @@
       margin-top: 12px;
       font-weight: 500;
     }
+
     .connection-status.idle {
       background: #f3f4f6;
       color: #9ca3af;
     }
+
     .connection-status.testing {
       background: #fef3c7;
       color: #92400e;
     }
+
     .connection-status.ok {
       background: #ecfdf5;
       color: #065f46;
     }
+
     .connection-status.fail {
       background: #fef2f2;
       color: #991b1b;
     }
+
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
     }
-    .idle .status-dot { background: #d1d5db; }
-    .testing .status-dot { background: #f59e0b; animation: pulse 1s infinite; }
-    .ok .status-dot { background: #10b981; }
-    .fail .status-dot { background: #ef4444; }
+
+    .idle .status-dot {
+      background: #d1d5db;
+    }
+
+    .testing .status-dot {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    .ok .status-dot {
+      background: #10b981;
+    }
+
+    .fail .status-dot {
+      background: #ef4444;
+    }
+
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
     }
 
     /* Folder tree */
@@ -147,18 +190,22 @@
       padding: 8px;
       background: #fafafa;
     }
+
     .tree-container ul {
       list-style: none;
       padding-left: 20px;
       margin: 0;
     }
-    .tree-container > ul {
+
+    .tree-container>ul {
       padding-left: 0;
     }
+
     .tree-container li {
       padding: 0;
       margin: 0;
     }
+
     .tree-row {
       display: flex;
       align-items: center;
@@ -169,13 +216,16 @@
       transition: background 0.1s;
       font-size: 13px;
     }
+
     .tree-row:hover {
       background: #eef2ff;
     }
+
     .tree-row.selected {
       background: #4f46e5;
       color: #fff;
     }
+
     .tree-toggle {
       width: 18px;
       flex-shrink: 0;
@@ -185,13 +235,16 @@
       cursor: pointer;
       padding: 2px;
     }
+
     .tree-row.selected .tree-toggle {
-      color: rgba(255,255,255,0.6);
+      color: rgba(255, 255, 255, 0.6);
     }
+
     .tree-icon {
       margin: 0 4px 0 0;
       font-size: 13px;
     }
+
     .folder-path {
       margin-top: 8px;
       padding: 8px 12px;
@@ -204,7 +257,10 @@
       word-break: break-all;
       display: none;
     }
-    .folder-path.visible { display: block; }
+
+    .folder-path.visible {
+      display: block;
+    }
 
     /* Toggle switch */
     .toggle-row {
@@ -213,19 +269,23 @@
       justify-content: space-between;
       padding: 4px 0;
     }
+
     .toggle-info {
       flex: 1;
     }
+
     .toggle-info .toggle-label {
       font-size: 14px;
       font-weight: 600;
       color: #374151;
     }
+
     .toggle-info .toggle-desc {
       font-size: 12px;
       color: #9ca3af;
       margin-top: 2px;
     }
+
     .toggle-switch {
       position: relative;
       width: 44px;
@@ -233,19 +293,25 @@
       flex-shrink: 0;
       margin-left: 16px;
     }
+
     .toggle-switch input {
       opacity: 0;
       width: 0;
       height: 0;
     }
+
     .toggle-slider {
       position: absolute;
       cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       background: #d1d5db;
       border-radius: 12px;
       transition: background 0.2s;
     }
+
     .toggle-slider::before {
       content: "";
       position: absolute;
@@ -256,12 +322,14 @@
       background: #fff;
       border-radius: 50%;
       transition: transform 0.2s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
     }
-    .toggle-switch input:checked + .toggle-slider {
+
+    .toggle-switch input:checked+.toggle-slider {
       background: #4f46e5;
     }
-    .toggle-switch input:checked + .toggle-slider::before {
+
+    .toggle-switch input:checked+.toggle-slider::before {
       transform: translateX(20px);
     }
 
@@ -270,13 +338,18 @@
       margin-top: 14px;
       display: none;
     }
-    .interval-row.visible { display: block; }
+
+    .interval-row.visible {
+      display: block;
+    }
+
     .interval-options {
       display: flex;
       gap: 8px;
       margin-top: 6px;
       flex-wrap: wrap;
     }
+
     .interval-opt {
       padding: 6px 14px;
       border: 1px solid #d1d5db;
@@ -287,10 +360,12 @@
       color: #374151;
       transition: all 0.15s;
     }
+
     .interval-opt:hover {
       border-color: #4f46e5;
       color: #4f46e5;
     }
+
     .interval-opt.active {
       background: #4f46e5;
       color: #fff;
@@ -301,7 +376,10 @@
     .toggle-settings {
       display: none;
     }
-    .toggle-settings.visible { display: block; }
+
+    .toggle-settings.visible {
+      display: block;
+    }
 
     /* Two-way sync specifics */
     .initial-sync-section {
@@ -310,13 +388,18 @@
       padding-top: 16px;
       border-top: 1px solid #e5e7eb;
     }
-    .initial-sync-section.visible { display: block; }
+
+    .initial-sync-section.visible {
+      display: block;
+    }
+
     .radio-group {
       display: flex;
       flex-direction: column;
       gap: 10px;
       margin: 12px 0;
     }
+
     .radio-option {
       display: flex;
       align-items: flex-start;
@@ -327,47 +410,60 @@
       cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
     }
+
     .radio-option:hover {
       border-color: #4f46e5;
       background: #f5f3ff;
     }
+
     .radio-option.selected {
       border-color: #4f46e5;
       background: #eef2ff;
     }
+
     .radio-option input[type="radio"] {
       margin-top: 2px;
       accent-color: #4f46e5;
     }
+
     .radio-option-text {
       flex: 1;
     }
+
     .radio-option-label {
       font-size: 13px;
       font-weight: 600;
       color: #374151;
     }
+
     .radio-option-desc {
       font-size: 11px;
       color: #9ca3af;
       margin-top: 2px;
     }
+
     .initial-progress {
       margin-top: 12px;
       display: none;
     }
-    .initial-progress.visible { display: block; }
+
+    .initial-progress.visible {
+      display: block;
+    }
+
     .initial-progress-text {
       font-size: 12px;
       color: #6b7280;
       margin-top: 6px;
     }
+
     .initial-progress-bar {
       height: 4px;
       background: #e5e7eb;
       border-radius: 2px;
       overflow: hidden;
     }
+
     .initial-progress-fill {
       height: 100%;
       background: linear-gradient(90deg, #4f46e5, #7c3aed);
@@ -375,11 +471,34 @@
       width: 40%;
       animation: indeterminate 1.2s ease-in-out infinite;
     }
+
     @keyframes indeterminate {
-      0% { margin-left: 0; }
-      50% { margin-left: 60%; }
-      100% { margin-left: 0; }
+      0% {
+        margin-left: 0;
+      }
+
+      50% {
+        margin-left: 60%;
+      }
+
+      100% {
+        margin-left: 0;
+      }
     }
+
+    .progress-container {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 15px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .progress-container.visible {
+      display: flex;
+    }
+
     .folder-conflict-warning {
       display: none;
       margin-top: 8px;
@@ -390,7 +509,11 @@
       font-size: 12px;
       color: #991b1b;
     }
-    .folder-conflict-warning.visible { display: block; }
+
+    .folder-conflict-warning.visible {
+      display: block;
+    }
+
     .initial-done-badge {
       display: none;
       margin-top: 12px;
@@ -401,7 +524,10 @@
       font-size: 12px;
       color: #065f46;
     }
-    .initial-done-badge.visible { display: block; }
+
+    .initial-done-badge.visible {
+      display: block;
+    }
 
     /* Buttons */
     .btn-row {
@@ -409,6 +535,7 @@
       gap: 10px;
       margin-top: 24px;
     }
+
     .btn {
       padding: 10px 24px;
       border: none;
@@ -418,19 +545,30 @@
       cursor: pointer;
       transition: opacity 0.15s, transform 0.1s;
     }
-    .btn:active { transform: scale(0.97); }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
     .btn-primary {
       background: linear-gradient(135deg, #4f46e5, #7c3aed);
       color: #fff;
       flex: 1;
     }
-    .btn-primary:hover { opacity: 0.9; }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
     .btn-secondary {
       background: #fff;
       color: #374151;
       border: 1px solid #d1d5db;
     }
-    .btn-secondary:hover { background: #f9fafb; }
+
+    .btn-secondary:hover {
+      background: #f9fafb;
+    }
 
     /* Toast notification */
     .toast {
@@ -442,24 +580,28 @@
       border-radius: 10px;
       font-size: 14px;
       font-weight: 500;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
       transition: transform 0.3s ease;
       z-index: 100;
       white-space: pre-line;
     }
+
     .toast.visible {
       transform: translateX(-50%) translateY(0);
     }
+
     .toast.success {
       background: #065f46;
       color: #fff;
     }
+
     .toast.error {
       background: #991b1b;
       color: #fff;
     }
   </style>
 </head>
+
 <body>
   <div class="container">
 
@@ -471,7 +613,10 @@
     <!-- Connection card -->
     <div class="card">
       <div class="card-title">
-        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <svg viewBox="0 0 24 24">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
         Connection
       </div>
       <div class="field">
@@ -496,7 +641,10 @@
     <!-- Auto-sync card -->
     <div class="card">
       <div class="card-title">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
         Auto-Sync
       </div>
       <div class="toggle-row">
@@ -524,7 +672,11 @@
     <!-- Full Linkding Sync card -->
     <div class="card">
       <div class="card-title">
-        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg viewBox="0 0 24 24">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
         Full Linkding Download
       </div>
       <div class="toggle-row">
@@ -544,7 +696,7 @@
           <input type="text" id="folder-name" value="Linkding" placeholder="Linkding">
           <div class="hint">Bookmarks will be organized by tag inside this folder.</div>
         </div>
-        
+
         <div class="field">
           <label for="excluded-tags">Excluded Tags</label>
           <input type="text" id="excluded-tags" placeholder="bookmark-sync, private">
@@ -562,7 +714,9 @@
     <!-- Two-Way Sync card -->
     <div class="card">
       <div class="card-title">
-        <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        <svg viewBox="0 0 24 24">
+          <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
         Two-Way Bookmark Sync
       </div>
       <div class="toggle-row">
@@ -589,7 +743,8 @@
         </div>
         <div class="folder-path" id="twoway-selected-path"></div>
         <div class="folder-conflict-warning" id="folder-conflict-warning">
-          The two-way sync folder cannot be the same as (or inside) the one-way download folder. Choose a different folder.
+          The two-way sync folder cannot be the same as (or inside) the one-way download folder. Choose a different
+          folder.
         </div>
 
         <div class="initial-done-badge" id="initial-done-badge">
@@ -604,14 +759,16 @@
               <input type="radio" name="initial-mode" value="merge" checked>
               <div class="radio-option-text">
                 <div class="radio-option-label">Merge</div>
-                <div class="radio-option-desc">Match by URL. Upload Chrome-only bookmarks, download Linkding-only bookmarks. No duplicates.</div>
+                <div class="radio-option-desc">Match by URL. Upload Chrome-only bookmarks, download Linkding-only
+                  bookmarks. No duplicates.</div>
               </div>
             </label>
             <label class="radio-option" data-mode="push">
               <input type="radio" name="initial-mode" value="push">
               <div class="radio-option-text">
                 <div class="radio-option-label">Push to Linkding</div>
-                <div class="radio-option-desc">Upload all Chrome folder bookmarks to Linkding with the sync tag. Existing URL matches are linked.</div>
+                <div class="radio-option-desc">Upload all Chrome folder bookmarks to Linkding with the sync tag.
+                  Existing URL matches are linked.</div>
               </div>
             </label>
             <label class="radio-option" data-mode="pull">
@@ -630,6 +787,28 @@
             <div class="initial-progress-text" id="initial-progress-text">Starting...</div>
           </div>
         </div>
+
+        <div class="initial-done-badge" id="initial-done-badge">
+          Initial sync completed. Two-way sync is active.
+        </div>
+
+        <!-- Manual / Force Sync Controls -->
+        <details class="option-group" style="margin-top: 20px; border-top: 1px solid #333; padding-top: 20px;">
+          <summary style="cursor: pointer; font-size: 1.17em; font-weight: bold; margin-bottom: 10px; outline: none;">
+            Manual Actions (Force Sync)</summary>
+          <p class="description">Force a full sync operation. Use with caution.</p>
+          <div class="btn-row">
+            <button id="force-push-btn" class="btn warning">Force Push</button>
+            <button id="force-pull-btn" class="btn warning">Force Pull</button>
+            <button id="force-merge-btn" class="btn secondary">Force Merge</button>
+          </div>
+          <div id="manual-progress" class="progress-container" style="flex-direction: column; align-items: stretch;">
+            <div class="initial-progress-bar">
+              <div id="manual-progress-fill" class="initial-progress-fill" style="width: 0%"></div>
+            </div>
+            <span id="manual-progress-text" style="align-self: center;">Syncing...</span>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -643,4 +822,5 @@
 
   <script src="options.js"></script>
 </body>
+
 </html>
