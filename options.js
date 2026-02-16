@@ -290,6 +290,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     folderName: "Linkding",
     parentFolderId: null,
     oneWayEnabled: true,
+    excludedTags: "bookmark-sync",
     autoSync: false,
     autoSyncInterval: 60,
     twoWayEnabled: false,
@@ -301,6 +302,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("url").value = s.url;
   document.getElementById("token").value = s.token;
   document.getElementById("folder-name").value = s.folderName;
+  document.getElementById("excluded-tags").value = s.excludedTags;
 
   // One-way sync
   oneWayToggle.checked = s.oneWayEnabled;
@@ -430,6 +432,7 @@ document.getElementById("save").addEventListener("click", async () => {
       folderName,
       parentFolderId: oneWayEnabled ? selectedParentId : null,
       oneWayEnabled,
+      excludedTags: document.getElementById("excluded-tags").value.trim(),
       autoSync,
       autoSyncInterval: selectedInterval,
       twoWayEnabled,

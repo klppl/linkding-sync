@@ -16,6 +16,7 @@ const SETTINGS_DEFAULTS = {
   twoWaySyncFolderId: null,
   twoWayInitialSyncDone: false,
   twoWayLastSyncTime: null,
+  excludedTags: "bookmark-sync", // Comma-separated list of tags to exclude from one-way sync
 };
 
 async function getSettings() {
@@ -60,7 +61,7 @@ async function removeChildrenOf(folderId) {
 }
 
 async function runSync(onProgress) {
-  const log = onProgress || (() => {});
+  const log = onProgress || (() => { });
 
   const { url, token, folderName, parentFolderId } = await getSettings();
   if (!url || !token) throw new Error("Missing URL or API token.");
@@ -84,15 +85,27 @@ async function runSync(onProgress) {
 
   // Collect tags
   const tagNames = new Set();
+  const excludedTagsList = (await getSettings()).excludedTags
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+
   let hasUntagged = false;
   for (const bm of bookmarks) {
     if (bm.tag_names && bm.tag_names.length > 0) {
-      bm.tag_names.forEach((t) => tagNames.add(t));
+      bm.tag_names.forEach((t) => {
+        if (!excludedTagsList.includes(t)) {
+          tagNames.add(t);
+        }
+      });
     } else {
       hasUntagged = true;
     }
   }
-  if (hasUntagged) tagNames.add("Untagged");
+  // Only add Untagged if it's not explicitly excluded (though rare use case)
+  if (hasUntagged && !excludedTagsList.includes("Untagged")) {
+    tagNames.add("Untagged");
+  }
 
   log("folders", `Creating ${tagNames.size} tag folders...`);
   const tagFolderIds = {};
@@ -105,13 +118,19 @@ async function runSync(onProgress) {
   for (const bm of bookmarks) {
     const tags =
       bm.tag_names && bm.tag_names.length > 0 ? bm.tag_names : ["Untagged"];
-    for (const tag of tags) {
-      await chrome.bookmarks.create({
-        parentId: tagFolderIds[tag],
-        title: bm.title || bm.url,
-        url: bm.url,
-      });
-      created++;
+
+    // Filter tags for this bookmark
+    const validTags = tags.filter(t => !excludedTagsList.includes(t));
+
+    for (const tag of validTags) {
+      if (tagFolderIds[tag]) { // Should exist if we did our job above
+        await chrome.bookmarks.create({
+          parentId: tagFolderIds[tag],
+          title: bm.title || bm.url,
+          url: bm.url,
+        });
+        created++;
+      }
     }
     if (created % 100 === 0) {
       log("saving", `Saved ${created} entries...`);
@@ -280,7 +299,7 @@ async function isInsideTwoWayFolder(nodeId, twoWaySyncFolderId) {
 }
 
 async function runInitialTwoWaySync(mode, onProgress) {
-  const log = onProgress || (() => {});
+  const log = onProgress || (() => { });
   const settings = await getSettings();
   const { url: baseUrl, token, twoWaySyncTag, twoWaySyncFolderId } = settings;
 
@@ -465,7 +484,7 @@ async function runInitialTwoWaySync(mode, onProgress) {
 }
 
 async function runTwoWaySync(onProgress) {
-  const log = onProgress || (() => {});
+  const log = onProgress || (() => { });
   const settings = await getSettings();
   const { url: baseUrl, token, twoWayEnabled, twoWaySyncTag, twoWaySyncFolderId, twoWayInitialSyncDone } = settings;
 
