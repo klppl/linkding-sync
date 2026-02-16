@@ -5,6 +5,7 @@ const SETTINGS_DEFAULTS = {
   token: "",
   folderName: "Linkding",
   parentFolderId: null,
+  oneWayEnabled: true,
   autoSync: false,
   autoSyncInterval: 60,
   lastSyncTime: null,

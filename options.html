@@ -297,11 +297,13 @@
       border-color: #4f46e5;
     }
 
-    /* Two-way sync specifics */
-    .twoway-settings {
+    /* Collapsible settings that show/hide with toggle */
+    .toggle-settings {
       display: none;
     }
-    .twoway-settings.visible { display: block; }
+    .toggle-settings.visible { display: block; }
+
+    /* Two-way sync specifics */
     .initial-sync-section {
       display: none;
       margin-top: 16px;
@@ -491,24 +493,6 @@
       </div>
     </div>
 
-    <!-- Destination card -->
-    <div class="card">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        Bookmark Destination
-      </div>
-      <div class="field">
-        <label for="folder-name">Folder Name</label>
-        <input type="text" id="folder-name" value="Linkding" placeholder="Linkding">
-        <div class="hint">Bookmarks will be organized by tag inside this folder.</div>
-      </div>
-      <div class="field">
-        <label>Parent Location</label>
-        <div class="tree-container" id="folder-tree"></div>
-      </div>
-      <div class="folder-path" id="selected-path"></div>
-    </div>
-
     <!-- Auto-sync card -->
     <div class="card">
       <div class="card-title">
@@ -518,7 +502,7 @@
       <div class="toggle-row">
         <div class="toggle-info">
           <div class="toggle-label">Automatic sync</div>
-          <div class="toggle-desc">Keep bookmarks up to date in the background.</div>
+          <div class="toggle-desc">Periodically run all enabled sync modes in the background.</div>
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="auto-sync">
@@ -537,11 +521,42 @@
       </div>
     </div>
 
+    <!-- Full Linkding Sync card -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Full Linkding Download
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Enable full download</div>
+          <div class="toggle-desc">Download all Linkding bookmarks into a browser folder, organized by tag.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="oneway-enabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-settings" id="oneway-settings">
+        <div class="field" style="margin-top:16px;">
+          <label for="folder-name">Folder Name</label>
+          <input type="text" id="folder-name" value="Linkding" placeholder="Linkding">
+          <div class="hint">Bookmarks will be organized by tag inside this folder.</div>
+        </div>
+        <div class="field">
+          <label>Parent Location</label>
+          <div class="tree-container" id="folder-tree"></div>
+        </div>
+        <div class="folder-path" id="selected-path"></div>
+      </div>
+    </div>
+
     <!-- Two-Way Sync card -->
     <div class="card">
       <div class="card-title">
         <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
-        Two-Way Sync
+        Two-Way Bookmark Sync
       </div>
       <div class="toggle-row">
         <div class="toggle-info">
@@ -554,7 +569,7 @@
         </label>
       </div>
 
-      <div class="twoway-settings" id="twoway-settings">
+      <div class="toggle-settings" id="twoway-settings">
         <div class="field" style="margin-top:16px;">
           <label for="twoway-tag">Sync Tag</label>
           <input type="text" id="twoway-tag" value="bookmark-sync" placeholder="bookmark-sync">

@@ -167,20 +167,18 @@ async function isDescendantOf(childId, ancestorId) {
 
 async function checkFolderConflict() {
   const warning = document.getElementById("folder-conflict-warning");
-  if (!selectedTwoWayFolderId || !selectedParentId) {
+  if (!selectedTwoWayFolderId || !selectedParentId || !oneWayToggle.checked) {
     warning.classList.remove("visible");
     return false;
   }
 
   const oneWayFolderId = await getOneWayFolderId();
 
-  // Check if two-way folder is the same as the one-way target folder
   if (oneWayFolderId && selectedTwoWayFolderId === oneWayFolderId) {
     warning.classList.add("visible");
     return true;
   }
 
-  // Check if two-way folder is a descendant of the one-way folder
   if (oneWayFolderId && await isDescendantOf(selectedTwoWayFolderId, oneWayFolderId)) {
     warning.classList.add("visible");
     return true;
@@ -206,6 +204,19 @@ intervalOptions.forEach((opt) => {
     opt.classList.add("active");
     selectedInterval = parseInt(opt.dataset.val);
   });
+});
+
+// ===================== One-Way Sync UI =====================
+
+const oneWayToggle = document.getElementById("oneway-enabled");
+const oneWaySettings = document.getElementById("oneway-settings");
+
+oneWayToggle.addEventListener("change", () => {
+  oneWaySettings.classList.toggle("visible", oneWayToggle.checked);
+  if (oneWayToggle.checked) {
+    loadTree();
+  }
+  checkFolderConflict();
 });
 
 // ===================== Two-Way Sync UI =====================
@@ -254,7 +265,6 @@ document.getElementById("start-initial-sync").addEventListener("click", async ()
     if (response && response.ok) {
       const r = response.result;
       showToast("success", `Initial sync complete!\nAdded: ${r.added}, Updated: ${r.updated}, Downloaded: ${r.downloaded}, Total: ${r.total}`);
-      // Update UI to show sync is done
       document.getElementById("initial-sync-section").classList.remove("visible");
       document.getElementById("initial-done-badge").classList.add("visible");
     } else {
@@ -279,6 +289,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     token: "",
     folderName: "Linkding",
     parentFolderId: null,
+    oneWayEnabled: true,
     autoSync: false,
     autoSyncInterval: 60,
     twoWayEnabled: false,
@@ -290,6 +301,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("url").value = s.url;
   document.getElementById("token").value = s.token;
   document.getElementById("folder-name").value = s.folderName;
+
+  // One-way sync
+  oneWayToggle.checked = s.oneWayEnabled;
+  if (s.oneWayEnabled) {
+    oneWaySettings.classList.add("visible");
+  }
 
   // Auto-sync
   autoSyncToggle.checked = s.autoSync;
@@ -314,6 +331,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("initial-sync-section").classList.add("visible");
   }
 
+  // Load one-way tree (always, so selection is restored)
   await loadTree();
 });
 
@@ -362,6 +380,7 @@ document.getElementById("save").addEventListener("click", async () => {
   const url = document.getElementById("url").value.trim().replace(/\/+$/, "");
   const token = document.getElementById("token").value.trim();
   const folderName = document.getElementById("folder-name").value.trim() || "Linkding";
+  const oneWayEnabled = oneWayToggle.checked;
   const autoSync = autoSyncToggle.checked;
   const twoWayEnabled = twoWayToggle.checked;
   const twoWaySyncTag = document.getElementById("twoway-tag").value.trim() || "bookmark-sync";
@@ -370,8 +389,14 @@ document.getElementById("save").addEventListener("click", async () => {
     showToast("error", "URL and API token are required.");
     return;
   }
-  if (!selectedParentId) {
-    showToast("error", "Select a parent folder from the tree.");
+
+  if (!oneWayEnabled && !twoWayEnabled) {
+    showToast("error", "Enable at least one sync mode.");
+    return;
+  }
+
+  if (oneWayEnabled && !selectedParentId) {
+    showToast("error", "Select a parent folder for the full download.");
     return;
   }
 
@@ -384,13 +409,14 @@ document.getElementById("save").addEventListener("click", async () => {
       showToast("error", "Enter a sync tag for two-way sync.");
       return;
     }
-    const hasConflict = await checkFolderConflict();
-    if (hasConflict) {
-      showToast("error", "Two-way sync folder conflicts with one-way download folder. Choose a different folder.");
-      return;
+    if (oneWayEnabled) {
+      const hasConflict = await checkFolderConflict();
+      if (hasConflict) {
+        showToast("error", "Two-way sync folder conflicts with the full download folder. Choose a different folder.");
+        return;
+      }
     }
 
-    // Show initial sync section if not done yet
     const { twoWayInitialSyncDone } = await chrome.storage.sync.get({ twoWayInitialSyncDone: false });
     if (!twoWayInitialSyncDone) {
       document.getElementById("initial-sync-section").classList.add("visible");
@@ -402,7 +428,8 @@ document.getElementById("save").addEventListener("click", async () => {
       url,
       token,
       folderName,
-      parentFolderId: selectedParentId,
+      parentFolderId: oneWayEnabled ? selectedParentId : null,
+      oneWayEnabled,
       autoSync,
       autoSyncInterval: selectedInterval,
       twoWayEnabled,
@@ -420,7 +447,6 @@ function showToast(type, msg) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.className = `toast ${type}`;
-  // Force reflow before adding visible
   void el.offsetWidth;
   el.classList.add("visible");
   clearTimeout(toastTimer);

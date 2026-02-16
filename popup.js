@@ -10,6 +10,7 @@ const resultEl = document.getElementById("result");
 document.addEventListener("DOMContentLoaded", async () => {
   const s = await chrome.storage.sync.get({
     url: "",
+    oneWayEnabled: true,
     autoSync: false,
     autoSyncInterval: 60,
     lastSyncTime: null,
@@ -44,18 +45,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     autoLabel.textContent = "Auto-sync off";
   }
 
-  // Stats
-  document.getElementById("stat-bookmarks").textContent =
-    s.lastSyncCount != null ? s.lastSyncCount : "--";
-  document.getElementById("stat-tags").textContent =
-    s.lastSyncTags != null ? s.lastSyncTags : "--";
-  document.getElementById("stat-last").textContent =
-    s.lastSyncTime ? timeAgo(s.lastSyncTime) : "--";
-  document.getElementById("last-sync-time").textContent =
-    s.lastSyncTime ? `Last: ${new Date(s.lastSyncTime).toLocaleString()}` : "";
+  const hasTwoWay = s.twoWayEnabled && s.twoWayInitialSyncDone;
+
+  // One-way section
+  if (s.oneWayEnabled) {
+    document.getElementById("oneway-section").style.display = "block";
+    // Add label if both modes are active
+    if (hasTwoWay) {
+      document.getElementById("oneway-label").textContent = "Full Download";
+    }
+  } else {
+    document.getElementById("oneway-section").style.display = "none";
+  }
+
+  // Stats — show if one-way is enabled
+  const statsEl = document.querySelector(".stats");
+  if (s.oneWayEnabled) {
+    statsEl.style.display = "flex";
+    document.getElementById("stat-bookmarks").textContent =
+      s.lastSyncCount != null ? s.lastSyncCount : "--";
+    document.getElementById("stat-tags").textContent =
+      s.lastSyncTags != null ? s.lastSyncTags : "--";
+    document.getElementById("stat-last").textContent =
+      s.lastSyncTime ? timeAgo(s.lastSyncTime) : "--";
+    document.getElementById("last-sync-time").textContent =
+      s.lastSyncTime ? `Last: ${new Date(s.lastSyncTime).toLocaleString()}` : "";
+  } else {
+    statsEl.style.display = "none";
+    document.getElementById("last-sync-time").textContent = "";
+  }
 
   // Two-way sync section
-  if (s.twoWayEnabled && s.twoWayInitialSyncDone) {
+  if (hasTwoWay) {
     document.getElementById("twoway-section").style.display = "block";
     document.getElementById("twoway-last-sync").textContent =
       s.twoWayLastSyncTime
@@ -76,7 +97,7 @@ document.getElementById("open-options").addEventListener("click", (e) => {
 syncBtn.addEventListener("click", () => {
   syncBtn.disabled = true;
   syncBtn.classList.add("syncing");
-  syncLabel.textContent = "Syncing...";
+  syncLabel.textContent = "Downloading...";
   resultEl.className = "result";
   progressEl.classList.add("visible");
   progressBar.className = "progress-bar-fill indeterminate";
@@ -85,7 +106,7 @@ syncBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ action: "sync" }, (response) => {
     syncBtn.disabled = false;
     syncBtn.classList.remove("syncing");
-    syncLabel.textContent = "Sync Now";
+    syncLabel.textContent = "Download Now";
     progressEl.classList.remove("visible");
 
     if (chrome.runtime.lastError) {

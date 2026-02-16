@@ -4,11 +4,11 @@ A browser extension that syncs bookmarks from your self-hosted [Linkding](https:
 
 Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
 
-![Extension popup](screenshot/screenshot_extension.png)
+![Extension popup](screenshot/extension.png)
 
 ## Features
 
-### One-Way Sync (Linkding to Browser)
+### Full Linkding Download
 
 - Syncs all bookmarks from Linkding into a dedicated browser bookmark folder
 - Organizes bookmarks into subfolders by tag
@@ -18,7 +18,7 @@ Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
 - Choose any bookmark folder as the sync destination
 - Settings sync across devices via `chrome.storage.sync`
 
-### Two-Way Sync
+### Two-Way Bookmark Sync
 
 - Keep a browser folder (e.g. Bookmark Bar) in sync with Linkding bookmarks that share a specific tag
 - Bidirectional: add a bookmark in Chrome and it appears in Linkding, or add one in Linkding and it appears in Chrome
@@ -27,7 +27,8 @@ Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
 - Title and folder changes are detected and synced in both directions
 - Real-time sync: bookmark changes in Chrome trigger a sync automatically (2-second debounce)
 - Three initial sync modes: **Push** (Chrome to Linkding), **Pull** (Linkding to Chrome), or **Merge** (combine both, no duplicates)
-- Runs alongside the one-way sync without interference
+- Runs alongside the full download without interference
+- Both sync modes share a single **Auto-Sync** timer — enable either or both independently
 
 ## Installation
 
@@ -58,23 +59,23 @@ There is no build step required — the extension is plain JS/HTML/CSS.
    - Enter your Linkding instance URL (e.g. `https://linkding.domain.tld`)
    - Enter your API token (found in Linkding under **Settings > Integrations**)
    - Click **Test Connection** to verify
-   - Choose a folder name and parent location for your synced bookmarks
-   - Optionally enable automatic sync
+   - Optionally enable **Auto-Sync** and choose an interval
+   - Enable **Full Linkding Download** and/or **Two-Way Bookmark Sync** (see below)
    - Click **Save Settings**
 
-![Settings page](screenshot/screenshot_settings.png)
+![Settings page](screenshot/settings.png)
 
 ## Usage
 
-### One-Way Sync
+### Full Linkding Download
 
-Click the extension icon and press **Sync Now** to sync your bookmarks. The popup displays the number of bookmarks and tags synced, along with the time of the last sync.
+Enable this in Settings, choose a folder name and parent location, then click **Download Now** in the popup. The popup displays the number of bookmarks and tags synced, along with the time of the last sync.
 
-If auto-sync is enabled, the extension will sync in the background at your chosen interval.
+If auto-sync is enabled, all active sync modes run in the background at your chosen interval.
 
-### Two-Way Sync
+### Two-Way Bookmark Sync
 
-1. Open **Settings** and scroll to the **Two-Way Sync** card
+1. Open **Settings** and scroll to the **Two-Way Bookmark Sync** card
 2. Enable the toggle
 3. Set a **Sync Tag** (default: `bookmark-sync`) — only Linkding bookmarks with this tag will be synced
 4. Pick a **Sync Folder** in the browser (e.g. Bookmark Bar) — this folder and all its subfolders will be kept in sync

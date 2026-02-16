@@ -18,23 +18,28 @@ async function updateAlarm() {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
   console.log("[Linkding] Auto-sync triggered");
-  try {
-    const result = await runSync((phase, msg) => console.log(`[Linkding] ${msg}`));
-    console.log(`[Linkding] Auto-sync done: ${result.bookmarks} bookmarks, ${result.tags} tags`);
-  } catch (err) {
-    console.error("[Linkding] Auto-sync error:", err);
+
+  const settings = await getSettings();
+
+  // Run one-way sync if enabled
+  if (settings.oneWayEnabled) {
+    try {
+      const result = await runSync((phase, msg) => console.log(`[Linkding] ${msg}`));
+      console.log(`[Linkding] Auto-sync done: ${result.bookmarks} bookmarks, ${result.tags} tags`);
+    } catch (err) {
+      console.error("[Linkding] Auto-sync error:", err);
+    }
   }
 
-  // Also run two-way sync if enabled
-  try {
-    const settings = await getSettings();
-    if (settings.twoWayEnabled && settings.twoWayInitialSyncDone) {
+  // Run two-way sync if enabled
+  if (settings.twoWayEnabled && settings.twoWayInitialSyncDone) {
+    try {
       console.log("[Linkding] Auto two-way sync triggered");
       const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
       console.log(`[Linkding] Auto two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+    } catch (err) {
+      console.error("[Linkding] Auto two-way sync error:", err);
     }
-  } catch (err) {
-    console.error("[Linkding] Auto two-way sync error:", err);
   }
 });
 
