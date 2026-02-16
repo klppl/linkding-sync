@@ -576,7 +576,9 @@ async function runTwoWaySync(onProgress) {
 
     if (!inChrome && inLd) {
       // Deleted from Chrome → delete from Linkding
-      await deleteLinkdingBookmark(baseUrl, token, entry.linkdingId);
+      // Use the ID from the fresh fetch (ld.id), NOT the potentially stale mapping ID
+      const ld = ldByUrl.get(url);
+      await deleteLinkdingBookmark(baseUrl, token, ld.id);
       removed++;
       continue;
     }
