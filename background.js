@@ -2,6 +2,69 @@ importScripts("sync.js");
 
 const ALARM_NAME = "linkding-auto-sync";
 
+// Sync Manager to handle concurrency and queuing
+const SyncManager = {
+  isSyncing: false,
+  queuedTwoWay: false,
+  debounceTimer: null,
+
+  // Run a sync operation ensuring mutual exclusion
+  async run(type, func, ...args) {
+    if (this.isSyncing) {
+      if (type === 'twoWay') {
+        this.queuedTwoWay = true;
+        console.log("[Linkding] Sync already running. Queued two-way sync.");
+      } else {
+        console.log("[Linkding] Sync already running. Ignoring manual request.");
+        throw new Error("Sync is already in progress.");
+      }
+      return;
+    }
+
+    this.isSyncing = true;
+    try {
+      return await func(...args);
+    } finally {
+      this.isSyncing = false;
+      this.checkQueue();
+    }
+  },
+
+  // Check if a two-way sync was queued while we were busy
+  checkQueue() {
+    if (this.queuedTwoWay) {
+      this.queuedTwoWay = false;
+      console.log("[Linkding] Processing queued two-way sync...");
+      // Run the queued sync immediately
+      this.run('twoWay', runTwoWaySync, (phase, msg) => console.log(`[Linkding] ${msg}`));
+    }
+  },
+
+  // Handle debounced two-way sync requests
+  requestDebouncedTwoWaySync() {
+    // Clear existing timer
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+
+    // If we are already syncing, we still want to debounce the *request* to queue it.
+    this.debounceTimer = setTimeout(async () => {
+      const settings = await getSettings();
+      if (!settings.twoWayEnabled || !settings.twoWayInitialSyncDone) return;
+
+      if (this.isSyncing) {
+        this.queuedTwoWay = true;
+        console.log("[Linkding] Bookmark change detected but sync busy. Queued.");
+      } else {
+        console.log("[Linkding] Bookmark change detected, running two-way sync...");
+        this.run('twoWay', runTwoWaySync, (phase, msg) => console.log(`[Linkding] ${msg}`))
+          .then((result) => {
+            if (result) console.log(`[Linkding] Two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+          })
+          .catch((err) => console.error("[Linkding] Two-way sync error:", err));
+      }
+    }, 2000);
+  }
+};
+
 // Set up or tear down the alarm based on settings
 async function updateAlarm() {
   const { autoSync, autoSyncInterval } = await getSettings();
@@ -24,8 +87,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   // Run one-way sync if enabled
   if (settings.oneWayEnabled) {
     try {
-      const result = await runSync((phase, msg) => console.log(`[Linkding] ${msg}`));
-      console.log(`[Linkding] Auto-sync done: ${result.bookmarks} bookmarks, ${result.tags} tags`);
+      // Use SyncManager to run one-way sync
+      await SyncManager.run('oneWay', runSync, (phase, msg) => console.log(`[Linkding] ${msg}`));
+      console.log(`[Linkding] Auto-sync done`);
     } catch (err) {
       console.error("[Linkding] Auto-sync error:", err);
     }
@@ -35,8 +99,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (settings.twoWayEnabled && settings.twoWayInitialSyncDone) {
     try {
       console.log("[Linkding] Auto two-way sync triggered");
-      const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
-      console.log(`[Linkding] Auto two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+      // Use SyncManager
+      const result = await SyncManager.run('twoWay', runTwoWaySync, (phase, msg) => console.log(`[Linkding] ${msg}`));
+      if (result) {
+        console.log(`[Linkding] Auto two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+      }
     } catch (err) {
       console.error("[Linkding] Auto two-way sync error:", err);
     }
@@ -54,7 +121,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Listen for manual sync requests from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "sync") {
-    runSync((phase, text) => {
+    SyncManager.run('oneWay', runSync, (phase, text) => {
       chrome.runtime.sendMessage({ action: "syncProgress", phase, text }).catch(() => {});
     })
       .then((result) => sendResponse({ ok: true, result }))
@@ -63,7 +130,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === "twoWayInitialSync") {
-    runInitialTwoWaySync(msg.mode, (phase, text) => {
+    SyncManager.run('twoWay', runInitialTwoWaySync, msg.mode, (phase, text) => {
       chrome.runtime.sendMessage({ action: "twoWayProgress", phase, text }).catch(() => {});
     })
       .then((result) => sendResponse({ ok: true, result }))
@@ -72,7 +139,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === "twoWaySync") {
-    runTwoWaySync((phase, text) => {
+    SyncManager.run('twoWay', runTwoWaySync, (phase, text) => {
       chrome.runtime.sendMessage({ action: "twoWayProgress", phase, text }).catch(() => {});
     })
       .then((result) => sendResponse({ ok: true, result }))
@@ -82,28 +149,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ===================== Two-Way Bookmark Listeners =====================
-
-let twoWaySyncDebounceTimer = null;
-let twoWaySyncRunning = false;
-
-function debounceTwoWaySync() {
-  if (twoWaySyncRunning) return;
-  clearTimeout(twoWaySyncDebounceTimer);
-  twoWaySyncDebounceTimer = setTimeout(async () => {
-    twoWaySyncRunning = true;
-    try {
-      const settings = await getSettings();
-      if (!settings.twoWayEnabled || !settings.twoWayInitialSyncDone) return;
-      console.log("[Linkding] Bookmark change detected, running two-way sync...");
-      const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
-      console.log(`[Linkding] Two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
-    } catch (err) {
-      console.error("[Linkding] Two-way sync error:", err);
-    } finally {
-      twoWaySyncRunning = false;
-    }
-  }, 2000);
-}
 
 // Check if a folder ID is inside the two-way sync folder tree (walks up parents)
 async function isInsideTwoWaySyncFolder(folderId) {
@@ -118,13 +163,13 @@ async function isInsideTwoWaySyncFolder(folderId) {
 
 chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
   if (bookmark.url && await isInsideTwoWaySyncFolder(bookmark.parentId)) {
-    debounceTwoWaySync();
+    SyncManager.requestDebouncedTwoWaySync();
   }
 });
 
 chrome.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
   if (await isInsideTwoWaySyncFolder(removeInfo.parentId)) {
-    debounceTwoWaySync();
+    SyncManager.requestDebouncedTwoWaySync();
   }
 });
 
@@ -132,7 +177,7 @@ chrome.bookmarks.onChanged.addListener(async (id) => {
   try {
     const [node] = await chrome.bookmarks.get(id);
     if (await isInsideTwoWaySyncFolder(node.parentId)) {
-      debounceTwoWaySync();
+      SyncManager.requestDebouncedTwoWaySync();
     }
   } catch {
     // bookmark gone
@@ -143,7 +188,7 @@ chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
   const oldInside = await isInsideTwoWaySyncFolder(moveInfo.oldParentId);
   const newInside = await isInsideTwoWaySyncFolder(moveInfo.parentId);
   if (oldInside || newInside) {
-    debounceTwoWaySync();
+    SyncManager.requestDebouncedTwoWaySync();
   }
 });
 
