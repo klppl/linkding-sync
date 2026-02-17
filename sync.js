@@ -66,7 +66,15 @@ async function processBatch(items, limit, fn) {
   const executing = [];
 
   for (const item of items) {
-    const p = Promise.resolve().then(() => fn(item));
+    // Wrap fn(item) in try-catch to prevent one failure from stopping all
+    const p = Promise.resolve().then(async () => {
+      try {
+        return await fn(item);
+      } catch (e) {
+        console.error("Batch item failed", e);
+        return null;
+      }
+    });
     results.push(p);
 
     // Add small delay to avoid server rate limits (500 errors)
@@ -140,7 +148,7 @@ async function saveConfig(baseUrl, token, orderData, existingId = null) {
 async function runSync(onProgress) {
   const log = onProgress || (() => { });
 
-  const { url, token, folderName, parentFolderId, excludedTags } = await getSettings();
+  const { url, token, folderName, parentFolderId, excludedTags, twoWayEnabled, twoWaySyncTag } = await getSettings();
   if (!url || !token) throw new Error("Missing URL or API token.");
   if (!parentFolderId) throw new Error("No bookmark folder selected.");
 
@@ -179,6 +187,11 @@ async function runSync(onProgress) {
     .split(",")
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
+
+  // Automatically exclude the two-way sync tag to prevent duplication
+  if (twoWayEnabled && twoWaySyncTag && !excludedTagsList.includes(twoWaySyncTag)) {
+    excludedTagsList.push(twoWaySyncTag);
+  }
 
   let hasUntagged = false;
   for (const bm of bookmarks) {
