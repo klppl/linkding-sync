@@ -252,23 +252,23 @@ document.getElementById("start-initial-sync").addEventListener("click", async ()
   progress.classList.add("visible");
   progressText.textContent = "Starting initial sync...";
 
-  chrome.runtime.sendMessage({ action: "twoWayInitialSync", mode }, (response) => {
+  sendMessage({ action: "twoWayInitialSync", mode }, (response) => {
     btn.disabled = false;
     btn.textContent = "Start Initial Sync";
     progress.classList.remove("visible");
 
-    if (chrome.runtime.lastError) {
+    if (chrome.runtime.lastError || !response) {
       showToast("error", "Could not reach background worker. Try reloading the extension.");
       return;
     }
 
-    if (response && response.ok) {
+    if (response.ok) {
       const r = response.result;
       showToast("success", `Initial sync complete!\nAdded: ${r.added}, Updated: ${r.updated}, Downloaded: ${r.downloaded}, Total: ${r.total}`);
       document.getElementById("initial-sync-section").classList.remove("visible");
       document.getElementById("initial-done-badge").classList.add("visible");
     } else {
-      showToast("error", response ? response.error : "Unknown error");
+      showToast("error", response.error || "Unknown error");
     }
   });
 });
@@ -443,6 +443,21 @@ document.getElementById("save").addEventListener("click", async () => {
   );
 });
 
+// ===================== Helpers =====================
+
+// Send a message to the background worker, retrying once if the service worker is hibernated
+function sendMessage(msg, callback) {
+  chrome.runtime.sendMessage(msg, (response) => {
+    if (chrome.runtime.lastError) {
+      chrome.runtime.sendMessage(msg, (retryResponse) => {
+        callback(retryResponse);
+      });
+    } else {
+      callback(response);
+    }
+  });
+}
+
 // ===================== Toast =====================
 
 let toastTimer;
@@ -487,7 +502,7 @@ function runManualSync(mode) {
     fill.style.animation = "indeterminate 1.5s infinite linear"; // Start with indeterminate until numbers arrive
   }
 
-  chrome.runtime.sendMessage({ action: "twoWayInitialSync", mode }, (response) => {
+  sendMessage({ action: "twoWayInitialSync", mode }, (response) => {
     // Re-enable buttons
     ["push", "pull", "merge"].forEach(m => {
       document.getElementById(`force-${m}-btn`).disabled = false;
@@ -498,12 +513,12 @@ function runManualSync(mode) {
 
     progress.classList.remove("visible");
 
-    if (chrome.runtime.lastError) {
+    if (chrome.runtime.lastError || !response) {
       showToast("error", "Could not reach background worker. Try reloading.");
       return;
     }
 
-    if (response && response.ok) {
+    if (response.ok) {
       const r = response.result;
       let msg = `${mode} complete!\nAdded: ${r.added}, Updated: ${r.updated}, Downloaded: ${r.downloaded}`;
       if (r.configError) {

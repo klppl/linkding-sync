@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.0.0)"
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate version matches manifest
+        run: |
+          manifest_version=$(jq -r '.version' manifest.json)
+          if [ "$manifest_version" != "${{ github.event.inputs.version }}" ]; then
+            echo "::error::Version mismatch: manifest.json has '$manifest_version' but release input is '${{ github.event.inputs.version }}'"
+            echo "Update manifest.json version before creating a release."
+            exit 1
+          fi
+
+      - name: Build zip
+        run: |
+          zip -r linkding-sync-${{ github.event.inputs.version }}.zip \
+            manifest.json \
+            background.js \
+            sync.js \
+            popup.html \
+            popup.js \
+            options.html \
+            options.js \
+            icons/ \
+            LICENSE
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: v${{ github.event.inputs.version }}
+          generate_release_notes: true
+          files: linkding-sync-${{ github.event.inputs.version }}.zip

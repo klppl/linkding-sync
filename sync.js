@@ -60,49 +60,37 @@ async function removeChildrenOf(folderId) {
   }
 }
 
-// Helper for batch processing with concurrency limit
-async function processBatch(items, limit, fn) {
-  const results = [];
-  const executing = [];
-
-  for (const item of items) {
-    const p = Promise.resolve().then(() => fn(item));
-    results.push(p);
-
-    // Add small delay to avoid server rate limits (500 errors)
-    // Increased to 1000ms (1s) because 200ms was still getting blocked
-    await new Promise(r => setTimeout(r, 1000));
-
-    if (limit <= items.length) {
-      const e = p.then(() => executing.splice(executing.indexOf(e), 1));
-      executing.push(e);
-      if (executing.length >= limit) {
-        await Promise.race(executing);
-      }
+// Process items serially with a delay between each to avoid rate limits
+async function processSerial(items, fn, delayMs = 1000) {
+  for (let i = 0; i < items.length; i++) {
+    await fn(items[i], i);
+    if (delayMs > 0 && i < items.length - 1) {
+      await new Promise(r => setTimeout(r, delayMs));
     }
   }
-  return Promise.all(results);
 }
 
 // Config Bookmark Helpers
 const CONFIG_TITLE = "Linkding Sync Config";
 
+const CONFIG_URL = "http://example.com/?linkding-sync-config";
+
 async function fetchConfig(baseUrl, token) {
-  // Search for the config bookmark
-  const searchUrl = `${baseUrl.replace(/\/$/, "")}/api/bookmarks/?q=${encodeURIComponent(CONFIG_TITLE)}&limit=1`;
+  // Search for the config bookmark by its unique URL
+  const searchUrl = `${baseUrl.replace(/\/$/, "")}/api/bookmarks/?q=${encodeURIComponent(CONFIG_URL)}&limit=5`;
   try {
     const response = await fetch(searchUrl, {
       headers: { Authorization: `Token ${token}` },
     });
     if (!response.ok) return null;
     const data = await response.json();
-    const configBm = data.results.find(bm => bm.title === CONFIG_TITLE);
+    const configBm = data.results.find(bm => bm.url === CONFIG_URL);
     if (!configBm) return null;
 
     try {
-      return JSON.parse(configBm.notes);
+      return { data: JSON.parse(configBm.notes), id: configBm.id };
     } catch {
-      return null; // Invalid JSON or empty
+      return { data: null, id: configBm.id };
     }
   } catch (e) {
     console.error("Failed to fetch config", e);
@@ -125,7 +113,7 @@ async function saveConfig(baseUrl, token, orderData, existingId = null) {
     // Use a very simple URL to avoid validation errors
     try {
       await createLinkdingBookmark(baseUrl, token, {
-        url: "http://example.com/?linkding-sync-config",
+        url: CONFIG_URL,
         title: CONFIG_TITLE,
         notes,
         tagNames: ["bookmark-sync-config"],
@@ -154,12 +142,10 @@ async function runSync(onProgress) {
   log("preparing", "Preparing folders...");
   const rootFolderId = await getOrCreateFolder(folderName, parentFolderId);
 
-  // Clear previous bookmarks for a clean sync
-  await removeChildrenOf(rootFolderId);
-
   log("fetching", "Fetching from Linkding...");
   const bookmarks = await fetchAllBookmarks(url, token);
-  const config = await fetchConfig(url, token);
+  const configResult = await fetchConfig(url, token);
+  const config = configResult ? configResult.data : null;
 
   // Apply Sort Order from Config
   if (config && Array.isArray(config.order)) {
@@ -192,40 +178,86 @@ async function runSync(onProgress) {
       hasUntagged = true;
     }
   }
-  // Only add Untagged if it's not explicitly excluded (though rare use case)
   if (hasUntagged && !excludedTagsList.includes("Untagged")) {
     tagNames.add("Untagged");
   }
 
-  log("folders", `Creating ${tagNames.size} tag folders...`);
-  const tagFolderIds = {};
-  for (const tag of tagNames) {
-    tagFolderIds[tag] = await getOrCreateFolder(tag, rootFolderId);
-  }
-
-  log("saving", `Saving ${bookmarks.length} bookmarks...`);
-  let created = 0;
+  // Build desired state: tag → Set of URLs with titles
+  const desired = new Map(); // tag → Map<url, title>
   for (const bm of bookmarks) {
     const tags =
       bm.tag_names && bm.tag_names.length > 0 ? bm.tag_names : ["Untagged"];
-
-    // Filter tags for this bookmark
     const validTags = tags.filter(t => !excludedTagsList.includes(t));
-
+    const title = bm.title || bm.url;
     for (const tag of validTags) {
-      if (tagFolderIds[tag]) { // Should exist if we did our job above
-        await chrome.bookmarks.create({
-          parentId: tagFolderIds[tag],
-          title: bm.title || bm.url,
-          url: bm.url,
-        });
+      if (!desired.has(tag)) desired.set(tag, new Map());
+      desired.get(tag).set(bm.url, title);
+    }
+  }
+
+  // Read existing state from browser
+  log("comparing", "Comparing with existing bookmarks...");
+  const existingChildren = await chrome.bookmarks.getChildren(rootFolderId);
+  const existingFolders = new Map(); // tag → { id, bookmarks: Map<url, {id, title}> }
+  for (const child of existingChildren) {
+    if (!child.url) {
+      const folderBookmarks = await chrome.bookmarks.getChildren(child.id);
+      const bmMap = new Map();
+      for (const fb of folderBookmarks) {
+        if (fb.url) bmMap.set(fb.url, { id: fb.id, title: fb.title });
+      }
+      existingFolders.set(child.title, { id: child.id, bookmarks: bmMap });
+    }
+  }
+
+  let created = 0, removed = 0, updated = 0;
+
+  // Remove folders that should no longer exist
+  for (const [tag, folder] of existingFolders) {
+    if (!desired.has(tag)) {
+      await chrome.bookmarks.removeTree(folder.id);
+      removed += folder.bookmarks.size;
+    }
+  }
+
+  // Sync each tag folder
+  for (const [tag, desiredBookmarks] of desired) {
+    const existing = existingFolders.get(tag);
+    let folderId;
+
+    if (existing) {
+      folderId = existing.id;
+
+      // Remove bookmarks no longer in this tag
+      for (const [url, bm] of existing.bookmarks) {
+        if (!desiredBookmarks.has(url)) {
+          await chrome.bookmarks.remove(bm.id);
+          removed++;
+        }
+      }
+
+      // Add missing bookmarks and update changed titles
+      for (const [url, title] of desiredBookmarks) {
+        const existingBm = existing.bookmarks.get(url);
+        if (!existingBm) {
+          await chrome.bookmarks.create({ parentId: folderId, title, url });
+          created++;
+        } else if (existingBm.title !== title) {
+          await chrome.bookmarks.update(existingBm.id, { title });
+          updated++;
+        }
+      }
+    } else {
+      // New tag folder — create everything
+      folderId = await getOrCreateFolder(tag, rootFolderId);
+      for (const [url, title] of desiredBookmarks) {
+        await chrome.bookmarks.create({ parentId: folderId, title, url });
         created++;
       }
     }
-    if (created % 100 === 0) {
-      log("saving", `Saved ${created} entries...`);
-    }
   }
+
+  log("saving", `Done: ${created} added, ${removed} removed, ${updated} updated.`);
 
   // Persist last sync info
   await chrome.storage.sync.set({
@@ -234,7 +266,7 @@ async function runSync(onProgress) {
     lastSyncTags: tagNames.size,
   });
 
-  return { bookmarks: bookmarks.length, tags: tagNames.size, entries: created };
+  return { bookmarks: bookmarks.length, tags: tagNames.size, created, removed, updated };
 }
 
 // ===================== Two-Way Sync =====================
@@ -284,13 +316,13 @@ async function createLinkdingBookmark(baseUrl, token, { url, title, description,
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
-    const body = await resp.text().catch(() => "");
+    const errBody = await resp.text().catch(() => "");
     // Try to parse JSON error to be more helpful
     try {
-      const errObj = JSON.parse(body);
+      const errObj = JSON.parse(errBody);
       throw new Error(`Create failed ${resp.status}: ${JSON.stringify(errObj)}`);
     } catch {
-      throw new Error(`Create failed ${resp.status}: ${body}`);
+      throw new Error(`Create failed ${resp.status}: ${errBody}`);
     }
   }
   return resp.json();
@@ -305,11 +337,7 @@ async function updateLinkdingBookmark(baseUrl, token, id, { url, title, descript
   if (tag_names) bodyData.tag_names = tag_names;
 
   const resp = await fetch(`${baseUrl}/api/bookmarks/${id}/`, {
-    method: "PUT", // Linkding API supports partial updates via PATCH usually? Or PUT requires all fields?
-    // Documentation says PUT updates the bookmark. 
-    // If we use PUT we might need all fields. Let's use PATCH if supported, or assume PUT works with what we send.
-    // Actually, usually PUT replaces the resource. 
-    // Safest to just send what we have. 
+    method: "PATCH",
     headers: {
       Authorization: `Token ${token}`,
       "Content-Type": "application/json",
@@ -442,13 +470,9 @@ async function runInitialTwoWaySync(mode, onProgress) {
   if (mode === "push") {
     log("syncing", "Pushing Chrome bookmarks to Linkding...");
 
-    // Process in batches
-    // Reduced from 5 to 2 to avoid Cloudflare/rate-limit blocking (500 errors)
-    // Reduced to 1 (Serial) because 2 was still blocked
-    const BATCH_SIZE = 1;
     let processed = 0;
 
-    await processBatch(chromeBookmarks, BATCH_SIZE, async (cbm) => {
+    await processSerial(chromeBookmarks, async (cbm) => {
       const tags = buildTagsForPath(twoWaySyncTag, cbm.folderPath);
 
       if (ldByUrl.has(cbm.url)) {
@@ -499,7 +523,8 @@ async function runInitialTwoWaySync(mode, onProgress) {
     log("syncing", "Pulling Linkding bookmarks to Chrome...");
 
     // Fetch config and sort ldBookmarks if order exists
-    const config = await fetchConfig(baseUrl, token);
+    const configResult = await fetchConfig(baseUrl, token);
+    const config = configResult ? configResult.data : null;
     if (config && Array.isArray(config.order)) {
       const orderMap = new Map();
       config.order.forEach((u, i) => orderMap.set(u, i));
@@ -513,18 +538,10 @@ async function runInitialTwoWaySync(mode, onProgress) {
     // Clear existing bookmarks and subfolders
     await removeChildrenOf(twoWaySyncFolderId);
 
-    const BATCH_SIZE = 1;
     let processed = 0;
 
-    await processBatch(ldBookmarks, BATCH_SIZE, async (ld) => {
+    await processSerial(ldBookmarks, async (ld) => {
       const folderPath = extractFolderPath(twoWaySyncTag, ld.tag_names);
-      // Ensure folder path exists (needs careful handling with concurrency - here ensureFolderPath does minimal work if exists)
-      // Best to ensure all folder paths first? But that's complex. With small batch size, collisions are rare but possible.
-      // JS bookmark creation is async message passing.
-      // To be safe against race conditions on folder creation, we could pre-create all folders.
-      // But let's try direct. ensureFolderPath handles race? No, it doesn't really.
-      // Let's use a mutex-like approach or just pre-create.
-
       const parentId = await ensureFolderPath(twoWaySyncFolderId, folderPath);
 
       const title = ld.title || ld.url;
@@ -554,7 +571,8 @@ async function runInitialTwoWaySync(mode, onProgress) {
     let sortedUrls = [...new Set([...ldByUrl.keys(), ...chromeByUrl.keys()])];
 
     // Fetch config for sorting and later comparison
-    const config = await fetchConfig(baseUrl, token);
+    const configResult = await fetchConfig(baseUrl, token);
+    const config = configResult ? configResult.data : null;
     const existingOrder = config && Array.isArray(config.order) ? config.order : [];
 
     if (existingOrder.length > 0) {
@@ -657,22 +675,12 @@ async function runInitialTwoWaySync(mode, onProgress) {
     const finalChromeBookmarks = await getChromeBookmarksRecursive(twoWaySyncFolderId, "");
     const newOrder = finalChromeBookmarks.map(bm => bm.url);
 
-    // Check if it already exists
-    const searchUrl = `${baseUrl.replace(/\/$/, "")}/api/bookmarks/?q=${encodeURIComponent(CONFIG_TITLE)}&limit=1`;
-    const response = await fetch(searchUrl, { headers: { Authorization: `Token ${token}` } });
-    let configId = null;
-
-    if (response.ok) {
-      const data = await response.json();
-      const existing = data.results.find(bm => bm.title === CONFIG_TITLE);
-      if (existing) {
-        configId = existing.id;
-        log("syncing", `Found existing config (ID: ${configId}). Updating...`);
-      } else {
-        log("syncing", "No existing config found. Creating new...");
-      }
+    const existingConfig = await fetchConfig(baseUrl, token);
+    const configId = existingConfig ? existingConfig.id : null;
+    if (configId) {
+      log("syncing", `Found existing config (ID: ${configId}). Updating...`);
     } else {
-      console.error("Failed to search for config bookmark", response.status);
+      log("syncing", "No existing config found. Creating new...");
     }
 
     await saveConfig(baseUrl, token, { order: newOrder }, configId);

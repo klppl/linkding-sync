@@ -19,27 +19,32 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
   console.log("[Linkding] Auto-sync triggered");
 
-  const settings = await getSettings();
+  isSelfModifying = true;
+  try {
+    const settings = await getSettings();
 
-  // Run one-way sync if enabled
-  if (settings.oneWayEnabled) {
-    try {
-      const result = await runSync((phase, msg) => console.log(`[Linkding] ${msg}`));
-      console.log(`[Linkding] Auto-sync done: ${result.bookmarks} bookmarks, ${result.tags} tags`);
-    } catch (err) {
-      console.error("[Linkding] Auto-sync error:", err);
+    // Run one-way sync if enabled
+    if (settings.oneWayEnabled) {
+      try {
+        const result = await runSync((phase, msg) => console.log(`[Linkding] ${msg}`));
+        console.log(`[Linkding] Auto-sync done: ${result.bookmarks} bookmarks, ${result.tags} tags`);
+      } catch (err) {
+        console.error("[Linkding] Auto-sync error:", err);
+      }
     }
-  }
 
-  // Run two-way sync if enabled
-  if (settings.twoWayEnabled && settings.twoWayInitialSyncDone) {
-    try {
-      console.log("[Linkding] Auto two-way sync triggered");
-      const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
-      console.log(`[Linkding] Auto two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
-    } catch (err) {
-      console.error("[Linkding] Auto two-way sync error:", err);
+    // Run two-way sync if enabled
+    if (settings.twoWayEnabled && settings.twoWayInitialSyncDone) {
+      try {
+        console.log("[Linkding] Auto two-way sync triggered");
+        const result = await runTwoWaySync((phase, msg) => console.log(`[Linkding] ${msg}`));
+        console.log(`[Linkding] Auto two-way sync done: +${result.added} -${result.removed} ~${result.updated}`);
+      } catch (err) {
+        console.error("[Linkding] Auto two-way sync error:", err);
+      }
     }
+  } finally {
+    isSelfModifying = false;
   }
 });
 
@@ -54,29 +59,35 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Listen for manual sync requests from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "sync") {
+    isSelfModifying = true;
     runSync((phase, text) => {
       chrome.runtime.sendMessage({ action: "syncProgress", phase, text }).catch(() => {});
     })
       .then((result) => sendResponse({ ok: true, result }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
+      .catch((err) => sendResponse({ ok: false, error: err.message }))
+      .finally(() => { isSelfModifying = false; });
     return true;
   }
 
   if (msg.action === "twoWayInitialSync") {
+    isSelfModifying = true;
     runInitialTwoWaySync(msg.mode, (phase, text) => {
       chrome.runtime.sendMessage({ action: "twoWayProgress", phase, text }).catch(() => {});
     })
       .then((result) => sendResponse({ ok: true, result }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
+      .catch((err) => sendResponse({ ok: false, error: err.message }))
+      .finally(() => { isSelfModifying = false; });
     return true;
   }
 
   if (msg.action === "twoWaySync") {
+    isSelfModifying = true;
     runTwoWaySync((phase, text) => {
       chrome.runtime.sendMessage({ action: "twoWayProgress", phase, text }).catch(() => {});
     })
       .then((result) => sendResponse({ ok: true, result }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
+      .catch((err) => sendResponse({ ok: false, error: err.message }))
+      .finally(() => { isSelfModifying = false; });
     return true;
   }
 });
@@ -85,12 +96,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 let twoWaySyncDebounceTimer = null;
 let twoWaySyncRunning = false;
+let isSelfModifying = false;
 
 function debounceTwoWaySync() {
-  if (twoWaySyncRunning) return;
+  if (twoWaySyncRunning || isSelfModifying) return;
   clearTimeout(twoWaySyncDebounceTimer);
   twoWaySyncDebounceTimer = setTimeout(async () => {
     twoWaySyncRunning = true;
+    isSelfModifying = true;
     try {
       const settings = await getSettings();
       if (!settings.twoWayEnabled || !settings.twoWayInitialSyncDone) return;
@@ -100,6 +113,7 @@ function debounceTwoWaySync() {
     } catch (err) {
       console.error("[Linkding] Two-way sync error:", err);
     } finally {
+      isSelfModifying = false;
       twoWaySyncRunning = false;
     }
   }, 2000);

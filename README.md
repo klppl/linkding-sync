@@ -34,13 +34,14 @@ Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
 
 There is no build step required — the extension is plain JS/HTML/CSS.
 
-1. **Download the repository**
+1. **Download the extension**
 
-   Clone with git:
+   Grab the latest `linkding-sync-*.zip` from the [Releases](https://github.com/klppl/linkding-sync/releases) page and extract it.
+
+   Alternatively, clone the repository:
    ```
    git clone https://github.com/klppl/linkding-sync.git
    ```
-   Or download and extract the [ZIP archive](https://github.com/klppl/linkding-sync/archive/refs/heads/main.zip).
 
 2. **Load the extension in your browser**
 
@@ -51,7 +52,7 @@ There is no build step required — the extension is plain JS/HTML/CSS.
      - Brave: `brave://extensions/`
    - Enable **Developer mode** (toggle in the top-right corner)
    - Click **Load unpacked**
-   - Select the `linkding-sync` folder you cloned or extracted
+   - Select the extracted folder (or the cloned `linkding-sync` folder)
 
 3. **Configure the extension**
 

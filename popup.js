@@ -103,18 +103,18 @@ syncBtn.addEventListener("click", () => {
   progressBar.className = "progress-bar-fill indeterminate";
   progressText.textContent = "Starting...";
 
-  chrome.runtime.sendMessage({ action: "sync" }, (response) => {
+  sendMessage({ action: "sync" }, (response) => {
     syncBtn.disabled = false;
     syncBtn.classList.remove("syncing");
     syncLabel.textContent = "Download Now";
     progressEl.classList.remove("visible");
 
-    if (chrome.runtime.lastError) {
+    if (chrome.runtime.lastError || !response) {
       showResult("error", "Could not reach background worker. Try reloading the extension.");
       return;
     }
 
-    if (response && response.ok) {
+    if (response.ok) {
       const r = response.result;
       showResult("success", `Synced ${r.bookmarks} bookmarks across ${r.tags} tag folders.`);
       // Update stats live
@@ -141,17 +141,17 @@ twoWaySyncBtn.addEventListener("click", () => {
   twoWaySyncLabel.textContent = "Syncing...";
   twoWayResult.style.display = "none";
 
-  chrome.runtime.sendMessage({ action: "twoWaySync" }, (response) => {
+  sendMessage({ action: "twoWaySync" }, (response) => {
     twoWaySyncBtn.disabled = false;
     twoWaySyncBtn.classList.remove("syncing");
     twoWaySyncLabel.textContent = "Two-Way Sync";
 
-    if (chrome.runtime.lastError) {
+    if (chrome.runtime.lastError || !response) {
       showTwoWayResult("error", "Could not reach background worker.");
       return;
     }
 
-    if (response && response.ok) {
+    if (response.ok) {
       const r = response.result;
       const parts = [];
       if (r.added > 0) parts.push(`+${r.added} added`);
@@ -181,6 +181,20 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 // --------------- Helpers ---------------
+
+// Send a message to the background worker, retrying once if the service worker is hibernated
+function sendMessage(msg, callback) {
+  chrome.runtime.sendMessage(msg, (response) => {
+    if (chrome.runtime.lastError) {
+      // Service worker may be hibernated — retry once to wake it
+      chrome.runtime.sendMessage(msg, (retryResponse) => {
+        callback(retryResponse);
+      });
+    } else {
+      callback(response);
+    }
+  });
+}
 
 function showResult(type, text) {
   resultEl.className = `result visible ${type}`;
