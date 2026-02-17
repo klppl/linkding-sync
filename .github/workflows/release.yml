@@ -2,10 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Release version (e.g. 1.0.0)"
-        required: true
 
 jobs:
   release:
@@ -16,19 +12,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Validate version matches manifest
+      - name: Bump version in manifest.json
+        id: version
         run: |
-          manifest_version=$(jq -r '.version' manifest.json)
-          if [ "$manifest_version" != "${{ github.event.inputs.version }}" ]; then
-            echo "::error::Version mismatch: manifest.json has '$manifest_version' but release input is '${{ github.event.inputs.version }}'"
-            echo "Update manifest.json version before creating a release."
-            exit 1
-          fi
+          current=$(jq -r '.version' manifest.json)
+          major=$(echo "$current" | cut -d. -f1)
+          minor=$(echo "$current" | cut -d. -f2)
+          new_version="${major}.$((minor + 1))"
+          jq --arg v "$new_version" '.version = $v' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "Bumped version: $current -> $new_version"
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Bump version to ${{ steps.version.outputs.version }}"
+          git push
 
       - name: Build zip
         run: |
-          zip -r linkding-sync-${{ github.event.inputs.version }}.zip \
+          zip -r linkding-sync-${{ steps.version.outputs.version }}.zip \
             manifest.json \
             background.js \
             sync.js \
@@ -42,7 +50,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: v${{ github.event.inputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
           generate_release_notes: true
-          files: linkding-sync-${{ github.event.inputs.version }}.zip
+          files: linkding-sync-${{ steps.version.outputs.version }}.zip
