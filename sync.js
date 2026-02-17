@@ -100,7 +100,7 @@ async function fetchConfig(baseUrl, token) {
     if (!configBm) return null;
 
     try {
-      return JSON.parse(configBm.description);
+      return JSON.parse(configBm.notes);
     } catch {
       return null; // Invalid JSON or empty
     }
@@ -111,12 +111,12 @@ async function fetchConfig(baseUrl, token) {
 }
 
 async function saveConfig(baseUrl, token, orderData, existingId = null) {
-  const description = JSON.stringify(orderData);
+  const notes = JSON.stringify(orderData);
 
   if (existingId) {
     // Update existing
     try {
-      await updateLinkdingBookmark(baseUrl, token, existingId, { description });
+      await updateLinkdingBookmark(baseUrl, token, existingId, { notes });
     } catch (e) {
       console.error("Failed to update config bookmark", e);
     }
@@ -127,7 +127,7 @@ async function saveConfig(baseUrl, token, orderData, existingId = null) {
       await createLinkdingBookmark(baseUrl, token, {
         url: "http://example.com/?linkding-sync-config",
         title: CONFIG_TITLE,
-        description,
+        notes,
         tagNames: ["bookmark-sync-config"],
       });
     } catch (e) {
@@ -267,19 +267,21 @@ async function fetchBookmarksWithTag(baseUrl, token, tag) {
   return all.filter((bm) => bm.tag_names && bm.tag_names.includes(tag));
 }
 
-async function createLinkdingBookmark(baseUrl, token, { url, title, description, tagNames }) {
+async function createLinkdingBookmark(baseUrl, token, { url, title, description, notes, tagNames }) {
+  const body = {
+    url,
+    title: title || url,
+    tag_names: tagNames,
+  };
+  if (description !== undefined) body.description = description;
+  if (notes !== undefined) body.notes = notes;
   const resp = await fetch(`${baseUrl}/api/bookmarks/`, {
     method: "POST",
     headers: {
       Authorization: `Token ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      url,
-      title: title || url,
-      description,
-      tag_names: tagNames,
-    }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
@@ -294,11 +296,12 @@ async function createLinkdingBookmark(baseUrl, token, { url, title, description,
   return resp.json();
 }
 
-async function updateLinkdingBookmark(baseUrl, token, id, { url, title, description, tag_names }) {
+async function updateLinkdingBookmark(baseUrl, token, id, { url, title, description, notes, tag_names }) {
   const bodyData = {};
   if (url) bodyData.url = url;
   if (title) bodyData.title = title;
   if (description !== undefined) bodyData.description = description;
+  if (notes !== undefined) bodyData.notes = notes;
   if (tag_names) bodyData.tag_names = tag_names;
 
   const resp = await fetch(`${baseUrl}/api/bookmarks/${id}/`, {
