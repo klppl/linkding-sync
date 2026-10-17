@@ -1,5 +1,7 @@
 # Linkding Sync
 
+[![License: Lagom](https://img.shields.io/badge/license-lagom-9E2B25)](https://klppl.github.io/lagom-license/)
+
 A browser extension that syncs bookmarks from your self-hosted [Linkding](https://github.com/sissbruecker/linkding) instance into your browser's bookmark tree, organized by tags.
 
 Works with Chrome, Vivaldi, Edge, Brave, and other Chromium-based browsers.
